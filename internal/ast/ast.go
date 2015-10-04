@@ -3,7 +3,8 @@ package ast
 import "go/token"
 
 type Program struct {
-	Classes []*Class
+	Classes  []*Class
+	classMap map[string]*Class
 }
 
 type Class struct {
@@ -23,7 +24,9 @@ type Formal struct {
 	Type *Ident
 }
 
-type Feature interface{}
+type Feature interface {
+	semantTypes(func(*Ident), *Class)
+}
 
 type Init struct {
 	Expr Expr
@@ -43,7 +46,9 @@ type Method struct {
 	Body     Expr
 }
 
-type Expr interface{}
+type Expr interface {
+	semantTypes(func(*Ident), *Class)
+}
 
 type NotExpr struct {
 	Expr Expr
@@ -95,6 +100,8 @@ type SuperCallExpr struct {
 	Pos  token.Pos
 	Name *Ident
 	Args []Expr
+
+	Class *Class
 }
 
 type StaticCallExpr struct {
@@ -110,6 +117,8 @@ type AllocExpr struct {
 type AssignExpr struct {
 	Name *Ident
 	Expr Expr
+
+	Class *Class
 }
 
 type VarExpr struct {
@@ -126,6 +135,8 @@ type ChainExpr struct {
 
 type ThisExpr struct {
 	Pos token.Pos
+
+	Class *Class
 }
 
 type NullExpr struct {
@@ -134,6 +145,8 @@ type NullExpr struct {
 
 type UnitExpr struct {
 	Pos token.Pos
+
+	Class *Class
 }
 
 type NameExpr struct {
@@ -165,19 +178,27 @@ type Case struct {
 type Ident struct {
 	Name string
 	Pos  token.Pos
+
+	Object interface{}
 }
 
 type IntLit struct {
 	Int int32
 	Pos token.Pos
+
+	Class *Class
 }
 
 type StringLit struct {
 	Str string
 	Pos token.Pos
+
+	Class *Class
 }
 
 type BoolLit struct {
 	Bool bool
 	Pos  token.Pos
+
+	Class *Class
 }

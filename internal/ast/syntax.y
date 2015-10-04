@@ -98,7 +98,7 @@ extends
 		$$ = &Extends{
 			Type: &Ident{
 				Name: "Any",
-				Pos:  0,
+				Pos:  token.NoPos,
 			},
 			Args: nil,
 		}

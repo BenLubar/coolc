@@ -33,9 +33,12 @@ func main() {
 
 	fset := token.NewFileSet()
 
-	haveError := false
-
 	var prog ast.Program
+
+	f := fset.AddFile("basic.cool", -1, len(basicCool))
+	f.SetLinesForContent(basicCool)
+
+	haveError := prog.Parse(f, bytes.NewReader(basicCool))
 
 	for _, name := range flag.Args() {
 		b, err := ioutil.ReadFile(name)
@@ -52,6 +55,10 @@ func main() {
 	}
 
 	if haveError {
+		os.Exit(2)
+	}
+
+	if prog.Semant(fset) {
 		os.Exit(2)
 	}
 }

@@ -164,8 +164,8 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 				}
 				continue
 			default:
-				r = '/'
 				check(l.r.UnreadRune())
+				r = '/'
 			}
 		}
 
@@ -342,6 +342,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 			return ARROW
 		default:
 			check(l.r.UnreadRune())
+			r = '='
 		}
 	case '<':
 		r, _, err = l.r.ReadRune()
@@ -352,6 +353,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 			return LE
 		default:
 			check(l.r.UnreadRune())
+			r = '<'
 		}
 	}
 	lvalue.pos = l.file.Pos(l.offset)
@@ -360,7 +362,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 
 func (l *lex) Error(s string) {
 	l.haveError = true
-	fmt.Printf("%s: %s at %v\n", l.file.Name(), s, l.file.Position(l.Pos()))
+	fmt.Printf("%v: %s\n", l.file.Position(l.Pos()), s)
 }
 
 func (l *lex) Pos() token.Pos {
