@@ -854,6 +854,11 @@ yydefault:
 			yyVAL.exp = &AssignExpr{
 				Name: yyDollar[1].id,
 				Expr: yyDollar[3].exp,
+
+				Unit: &Ident{
+					Name: "Unit",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 39:
@@ -861,6 +866,11 @@ yydefault:
 		{
 			yyVAL.exp = &NotExpr{
 				Expr: yyDollar[2].exp,
+
+				Boolean: &Ident{
+					Name: "Boolean",
+					Pos:  yyDollar[1].pos,
+				},
 			}
 		}
 	case 40:
@@ -868,6 +878,11 @@ yydefault:
 		{
 			yyVAL.exp = &NegativeExpr{
 				Expr: yyDollar[2].exp,
+
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[1].pos,
+				},
 			}
 		}
 	case 41:
@@ -877,6 +892,11 @@ yydefault:
 				Cond: yyDollar[3].exp,
 				Then: yyDollar[5].exp,
 				Else: yyDollar[7].exp,
+
+				Boolean: &Ident{
+					Name: "Boolean",
+					Pos:  yyDollar[1].pos,
+				},
 			}
 		}
 	case 42:
@@ -885,6 +905,15 @@ yydefault:
 			yyVAL.exp = &WhileExpr{
 				Cond: yyDollar[3].exp,
 				Body: yyDollar[5].exp,
+
+				Boolean: &Ident{
+					Name: "Boolean",
+					Pos:  yyDollar[1].pos,
+				},
+				Unit: &Ident{
+					Name: "Unit",
+					Pos:  yyDollar[1].pos,
+				},
 			}
 		}
 	case 43:
@@ -894,6 +923,15 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Boolean: &Ident{
+					Name: "Boolean",
+					Pos:  yyDollar[2].pos,
+				},
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 44:
@@ -903,6 +941,15 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Boolean: &Ident{
+					Name: "Boolean",
+					Pos:  yyDollar[2].pos,
+				},
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 45:
@@ -926,6 +973,11 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 47:
@@ -935,6 +987,11 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 48:
@@ -944,6 +1001,11 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 49:
@@ -953,6 +1015,11 @@ yydefault:
 				Pos:   yyDollar[2].pos,
 				Left:  yyDollar[1].exp,
 				Right: yyDollar[3].exp,
+
+				Int: &Ident{
+					Name: "Int",
+					Pos:  yyDollar[2].pos,
+				},
 			}
 		}
 	case 50:

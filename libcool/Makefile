@@ -8,5 +8,8 @@ noop: basic.o basic_linux.o noop.o
 	../coolc -o $@ $<
 
 .PHONY: ../coolc
-../coolc:
-	-(cd .. && go build)
+../coolc: ../internal/ast/y.go
+	(cd .. && go build)
+
+../internal/ast/y.go: ../internal/ast/syntax.y
+	(cd ../internal/ast && go generate)

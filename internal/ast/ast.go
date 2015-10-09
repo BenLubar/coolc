@@ -13,7 +13,11 @@ type Class struct {
 	Extends  *Extends
 	Features []Feature
 
-	Order int
+	Order    int
+	MaxOrder int
+	Depth    int
+
+	Methods []*Method
 }
 
 type Extends struct {
@@ -46,35 +50,50 @@ type Method struct {
 	Args     []*Formal
 	Type     *Ident
 	Body     Expr
+
+	Order int
 }
 
 type Expr interface {
 	semantTypes(func(*Ident), *Class)
+	semantIdentifiers(func(token.Pos, string), func(*Class, *Ident), func(...*Class) *Class, semantIdentifiers) *Class
 }
 
 type NotExpr struct {
 	Expr Expr
+
+	Boolean *Ident
 }
 
 type NegativeExpr struct {
 	Expr Expr
+
+	Int *Ident
 }
 
 type IfExpr struct {
 	Cond Expr
 	Then Expr
 	Else Expr
+
+	Boolean *Ident
 }
 
 type WhileExpr struct {
 	Cond Expr
 	Body Expr
+
+	Boolean *Ident
+	Unit    *Ident
 }
 
 type BinaryOperator struct {
 	Pos   token.Pos
 	Left  Expr
 	Right Expr
+
+	Boolean *Ident
+	Int     *Ident
 }
 
 type (
@@ -120,7 +139,7 @@ type AssignExpr struct {
 	Name *Ident
 	Expr Expr
 
-	Class *Class
+	Unit *Ident
 }
 
 type VarExpr struct {
@@ -175,6 +194,8 @@ type Case struct {
 	Name *Ident
 	Type *Ident
 	Body Expr
+
+	Tags []int
 }
 
 type Ident struct {

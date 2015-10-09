@@ -331,18 +331,33 @@ expr
 		$$ = &AssignExpr{
 			Name: $1,
 			Expr: $3,
+
+			Unit: &Ident{
+				Name: "Unit",
+				Pos:  $2,
+			},
 		}
 	}
 | '!' expr %prec '!'
 	{
 		$$ = &NotExpr{
 			Expr: $2,
+
+			Boolean: &Ident{
+				Name: "Boolean",
+				Pos:  $1,
+			},
 		}
 	}
 | '-' expr %prec '!'
 	{
 		$$ = &NegativeExpr{
 			Expr: $2,
+
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $1,
+			},
 		}
 	}
 | IF '(' expr ')' expr ELSE expr %prec IF
@@ -351,6 +366,11 @@ expr
 			Cond: $3,
 			Then: $5,
 			Else: $7,
+
+			Boolean: &Ident{
+				Name: "Boolean",
+				Pos:  $1,
+			},
 		}
 	}
 | WHILE '(' expr ')' expr %prec WHILE
@@ -358,6 +378,15 @@ expr
 		$$ = &WhileExpr{
 			Cond: $3,
 			Body: $5,
+
+			Boolean: &Ident{
+				Name: "Boolean",
+				Pos:  $1,
+			},
+			Unit: &Ident{
+				Name: "Unit",
+				Pos:  $1,
+			},
 		}
 	}
 | expr LE expr %prec LE
@@ -366,6 +395,15 @@ expr
 			Pos:     $2,
 			Left:    $1,
 			Right:   $3,
+
+			Boolean: &Ident{
+				Name: "Boolean",
+				Pos:  $2,
+			},
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr '<' expr %prec '<'
@@ -374,6 +412,15 @@ expr
 			Pos:     $2,
 			Left:    $1,
 			Right:   $3,
+
+			Boolean: &Ident{
+				Name: "Boolean",
+				Pos:  $2,
+			},
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr EQ expr %prec EQ
@@ -395,6 +442,11 @@ expr
 			Pos:   $2,
 			Left:  $1,
 			Right: $3,
+
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr '/' expr %prec '/'
@@ -403,6 +455,11 @@ expr
 			Pos:   $2,
 			Left:  $1,
 			Right: $3,
+
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr '+' expr %prec '+'
@@ -411,6 +468,11 @@ expr
 			Pos:   $2,
 			Left:  $1,
 			Right: $3,
+
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr '-' expr %prec '-'
@@ -419,6 +481,11 @@ expr
 			Pos:   $2,
 			Left:  $1,
 			Right: $3,
+
+			Int: &Ident{
+				Name: "Int",
+				Pos:  $2,
+			},
 		}
 	}
 | expr MATCH '{' cases '}' %prec MATCH
