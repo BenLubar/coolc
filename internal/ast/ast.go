@@ -12,6 +12,8 @@ type Class struct {
 	Formals  []*Formal
 	Extends  *Extends
 	Features []Feature
+
+	Order int
 }
 
 type Extends struct {

@@ -33,32 +33,48 @@ func main() {
 
 	fset := token.NewFileSet()
 
+	var haveErrors bool
 	var prog ast.Program
 
-	f := fset.AddFile("basic.cool", -1, len(basicCool))
-	f.SetLinesForContent(basicCool)
+	{
+		f := fset.AddFile("basic.cool", -1, len(basicCool))
+		f.SetLinesForContent(basicCool)
 
-	haveError := prog.Parse(f, bytes.NewReader(basicCool))
+		haveErrors = prog.Parse(f, bytes.NewReader(basicCool))
+	}
 
 	for _, name := range flag.Args() {
 		b, err := ioutil.ReadFile(name)
 		if err != nil {
 			fmt.Printf("%s: %v", name, err)
-			haveError = true
+			haveErrors = true
 			continue
 		}
 
 		f := fset.AddFile(name, -1, len(b))
 		f.SetLinesForContent(b)
 
-		haveError = prog.Parse(f, bytes.NewReader(b)) || haveError
+		haveErrors = prog.Parse(f, bytes.NewReader(b)) || haveErrors
 	}
 
-	if haveError {
+	if haveErrors {
 		os.Exit(2)
 	}
 
 	if prog.Semant(fset) {
+		os.Exit(2)
+	}
+
+	f, err := os.Create(*flagOutput)
+	if err != nil {
+		fmt.Printf("%s: %v\n", *flagOutput, err)
+		os.Exit(2)
+	}
+	defer f.Close()
+
+	err = prog.CodeGen(f)
+	if err != nil {
+		fmt.Printf("%s: %v\n", *flagOutput, err)
 		os.Exit(2)
 	}
 }

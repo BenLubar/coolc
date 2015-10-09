@@ -1,2 +1,5 @@
 coolc
 coolc.exe
+*.o
+libcool/noop.s
+libcool/noop

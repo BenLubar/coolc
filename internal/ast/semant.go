@@ -86,6 +86,60 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 		})
 	}
 
+	if haveErrors {
+		return
+	}
+
+	unit := p.classMap["Unit"]
+	main := p.classMap["Main"]
+
+	if unit == nil {
+		fmt.Println("missing required class: Unit")
+		haveErrors = true
+	}
+
+	if main == nil {
+		fmt.Println("missing required class: Main")
+		haveErrors = true
+	}
+
+	children := make(map[*Class][]*Class)
+	var free []*Class
+
+	for _, c := range p.Classes {
+		if c.Type.Name == "Any" {
+			free = append(free, c)
+		} else {
+			children[c.Extends.Type.Object.(*Class)] = append(children[c.Extends.Type.Object.(*Class)], c)
+		}
+	}
+
+	order := 0
+	for len(free) != 0 {
+		c := free[0]
+
+		free = append(children[c], free[1:]...)
+		delete(children, c)
+
+		c.Order = order
+		order++
+	}
+
+	for _, c := range p.Classes {
+		if _, ok := children[c]; ok {
+			fmt.Printf("%v: class heirarchy loop: %s\n", fset.Position(c.Type.Pos), c.Type.Name)
+			haveErrors = true
+		}
+	}
+
+	if haveErrors {
+		return
+	}
+
+	for _, c := range p.Classes {
+		c.semantMakeConstructor(unit)
+	}
+
 	return
 }
 
@@ -105,6 +159,92 @@ func (c *Class) semantTypes(lookup func(*Ident)) {
 		}
 	}
 	c.Extends.semantTypes(lookup, c)
+}
+
+func (c *Class) semantMakeConstructor(unit *Class) {
+	c.Features = append(make([]Feature, len(c.Formals)), c.Features...)
+	for i, f := range c.Formals {
+		c.Features[i] = &Attribute{
+			Name: f.Name,
+			Type: f.Type,
+			Init: &NameExpr{
+				Name: &Ident{
+					Pos:  f.Name.Pos,
+					Name: "'" + f.Name.Name,
+				},
+			},
+		}
+		f.Name = &Ident{
+			Pos:  f.Name.Pos,
+			Name: "'" + f.Name.Name,
+		}
+	}
+
+	var constructor Expr = &ThisExpr{
+		Pos: c.Type.Pos,
+
+		Class: c,
+	}
+
+	for i := len(c.Features) - 1; i >= 0; i-- {
+		switch f := c.Features[i].(type) {
+		case *Init:
+			constructor = &ChainExpr{
+				Pre:  f.Expr,
+				Expr: constructor,
+			}
+
+		case *Attribute:
+			constructor = &ChainExpr{
+				Pre: &AssignExpr{
+					Name: f.Name,
+					Expr: f.Init,
+
+					Class: unit,
+				},
+				Expr: constructor,
+			}
+		}
+	}
+
+	switch c.Type.Name {
+	case "Int", "Boolean", "String", "Unit", "Symbol":
+		return
+
+	case "ArrayAny":
+		constructor = &NativeExpr{
+			Pos: c.Type.Pos,
+		}
+
+	case "Any":
+		// don't call super-constructor because there isn't one.
+
+	default:
+		constructor = &ChainExpr{
+			Pre: &StaticCallExpr{
+				Recv: &ThisExpr{
+					Pos:   c.Extends.Type.Pos,
+					Class: c,
+				},
+				Name: &Ident{
+					Pos:  c.Extends.Type.Pos,
+					Name: c.Extends.Type.Name,
+				},
+				Args: c.Extends.Args,
+			},
+			Expr: constructor,
+		}
+	}
+
+	c.Features = append(c.Features, &Method{
+		Name: &Ident{
+			Pos:  c.Type.Pos,
+			Name: c.Type.Name,
+		},
+		Args: c.Formals,
+		Type: c.Type,
+		Body: constructor,
+	})
 }
 
 func (e *Extends) semantTypes(lookup func(*Ident), c *Class) {
@@ -173,6 +313,8 @@ func (f *Method) semantTypes(lookup func(*Ident), c *Class) {
 		case c.Type.Name == "ArrayAny" && f.Name.Name == "get":
 			return
 		case c.Type.Name == "ArrayAny" && f.Name.Name == "set":
+			return
+		case c.Type.Name == "ArrayAny" && f.Name.Name == "ArrayAny":
 			return
 		}
 	}
