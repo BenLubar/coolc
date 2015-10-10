@@ -185,13 +185,12 @@ IO.out:
 	pop %ebp
 	ret $8
 
-// TODO: IO.in
 .globl IO.in
 IO.in:
 	push %ebp
 	movl %esp, %ebp
 
-	movl $0, %eax
+	call runtime.TODO
 
 	pop %ebp
 	ret $4
