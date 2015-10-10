@@ -1,0 +1,7 @@
+class Main() extends IO() {
+	{
+		var aa : ArrayAny = new ArrayAny(16);
+		out_any(is_null(aa.set(0, "hello"))).out("\n");
+		out_any(aa.set(0, "world") == "hello").out("\n")
+	};
+}

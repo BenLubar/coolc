@@ -5,3 +5,5 @@ libcool/noop.s
 libcool/noop
 libcool/hello.s
 libcool/hello
+libcool/array.s
+libcool/array

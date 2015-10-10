@@ -345,12 +345,32 @@ String.charAt:
 	pop %ebp
 	ret $8
 
+ArrayAny._check_bounds:
+	movl offset_of_ArrayAny.length(%eax), %ecx
+	movl offset_of_Int.value(%ecx), %ecx
+	movl offset_of_Int.value(%ebx), %edx
+
+	cmpl $0, %edx
+	jl runtime.bounds_panic
+	cmpl %edx, %ecx
+	jle runtime.bounds_panic
+
+	shll $2, %edx
+	addl %edx, %eax
+	leal data_offset(%eax), %eax
+
+	ret
+
 .globl ArrayAny.get
 ArrayAny.get:
 	push %ebp
 	movl %esp, %ebp
 
-	call runtime.TODO
+	movl 12(%ebp), %eax
+	movl 8(%ebp), %ebx
+	call ArrayAny._check_bounds
+
+	movl (%eax), %eax
 
 	pop %ebp
 	ret $8
@@ -360,7 +380,14 @@ ArrayAny.set:
 	push %ebp
 	movl %esp, %ebp
 
-	call runtime.TODO
+	movl 16(%ebp), %eax
+	movl 12(%ebp), %ebx
+	call ArrayAny._check_bounds
+
+	movl 8(%ebp), %ecx
+	movl (%eax), %ebx
+	movl %ecx, (%eax)
+	movl %ebx, %eax
 
 	pop %ebp
 	ret $12
@@ -370,7 +397,32 @@ ArrayAny.ArrayAny:
 	push %ebp
 	movl %esp, %ebp
 
-	call runtime.TODO
+	movl 8(%ebp), %eax
+	movl offset_of_Int.value(%eax), %eax
+	cmpl $0, %eax
+	jl runtime.bounds_panic
+	shll $2, %eax
+	addl $4, %eax
+	cmpl $0, %eax
+	jl runtime.bounds_panic
+
+	movl 12(%ebp), %ebx
+	movl size_offset(%ebx), %ebx
+
+	cmpl %eax, %ebx
+	jl ArrayAny.ArrayAny.small
+
+	movl 12(%ebp), %eax
+
+ArrayAny.ArrayAny.done:
+	movl 8(%ebp), %ebx
+	movl %ebx, offset_of_ArrayAny.length(%eax)
 
 	pop %ebp
 	ret $8
+
+ArrayAny.ArrayAny.small:
+	movl $tag_of_ArrayAny, %ebx
+	call gc_alloc
+
+	jmp ArrayAny.ArrayAny.done

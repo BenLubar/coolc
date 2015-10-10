@@ -144,7 +144,7 @@ func (c *Class) genConstants(w io.Writer) {
 		}
 	}
 	fmt.Fprintf(w, ".globl size_of_%s\n", c.Type.Name)
-	fmt.Fprintf(w, ".set size_of_%s, data_offset + %d\n", c.Type.Name, sizeOf)
+	fmt.Fprintf(w, ".set size_of_%s, %d\n", c.Type.Name, sizeOf)
 }
 
 func (c *Class) genCode(w io.Writer) {

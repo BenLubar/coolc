@@ -117,13 +117,36 @@ runtime.null_panic:
 	movl $1, %ebx
 	int $0x80
 
+.data
+
+.align 2
+bounds_panic_before:
+	.ascii "Index out of bounds\n"
+.set bounds_panic_before_length, .-bounds_panic_before
+
+.text
+
+.globl runtime.bounds_panic
+runtime.bounds_panic:
+	push %ebp
+	movl %esp, %ebp
+
+	movl $4, %eax
+	movl $1, %ebx
+	leal bounds_panic_before, %ecx
+	movl $bounds_panic_before_length, %edx
+	int $0x80
+
+	movl $1, %eax
+	movl $1, %ebx
+	int $0x80
+
 .globl runtime.TODO
 runtime.TODO:
 	push %ebp
 	movl %esp, %ebp
 
-	movl $3, %eax
-	int $0x80
+	int $3
 
 	movl $1, %eax
 	movl $1, %ebx
