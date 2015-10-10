@@ -39,6 +39,14 @@ gc_increase_heap:
 .globl gc_alloc
 gc_alloc:
 	movl %eax, %ecx
+
+	test $3, %ecx
+	jz gc_alloc.aligned
+
+	andl $-4, %ecx
+	addl $4, %ecx
+
+gc_alloc.aligned:
 	movl gc_heap_start, %eax
 	movl gc_heap_alloc, %edx
 	subl %ecx, %edx
@@ -122,6 +130,7 @@ gc_alloc.found:
 	leal data_offset(%eax), %edi
 	movl %eax, %ebx
 	movb $0, %al
+	cld
 	rep stosb
 	movl %ebx, %eax
 	ret $0
@@ -134,21 +143,36 @@ _start:
 	movl $tag_of_Main, %ebx
 	call gc_alloc
 
-	push %eax
-	call Main.Main
+	call main
 
 	push $0
 	call runtime.exit
 
+.globl main
+main:
+	enter $0, $0
+
+	push %eax
+	call Main.Main
+
+	leave
+	ret
+
 .globl Any.toString
 Any.toString:
+	enter $0, $0
+
 	movl 8(%ebp), %eax
 	movl tag_offset(%eax), %eax
 	movl class_names(%eax), %eax
+
+	leave
 	ret $4
 
 .globl Any.equals
 Any.equals:
+	enter $0, $0
+
 	movl 8(%ebp), %eax
 	movl 12(%ebp), %ebx
 
@@ -156,14 +180,20 @@ Any.equals:
 	je Any.equals.false
 
 	leal boolean_true, %eax
+
+	leave
 	ret $8
 
 Any.equals.false:
 	leal boolean_false, %eax
+
+	leave
 	ret $8
 
 .globl IO.abort
 IO.abort:
+	enter $0, $0
+
 	movl 8(%ebp), %eax
 	push %eax
 	call runtime.output
@@ -173,8 +203,7 @@ IO.abort:
 
 .globl IO.out
 IO.out:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 	push %eax
@@ -182,23 +211,21 @@ IO.out:
 
 	movl 12(%ebp), %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl IO.in
 IO.in:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	call runtime.TODO
 
-	pop %ebp
+	leave
 	ret $4
 
 .globl IO.symbol
 IO.symbol:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -252,7 +279,7 @@ IO.symbol.notfound:
 	pop %ebx
 	movl %eax, (%ebx)
 
-	pop %ebp
+	leave
 	ret $8
 
 IO.symbol.found:
@@ -261,26 +288,24 @@ IO.symbol.found:
 	pop %ebx
 	movl %ecx, %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl IO.symbol_name
 IO.symbol_name:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
 	jz runtime.null_panic
 	movl offset_of_Symbol.name(%eax), %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl Int.equals
 Int.equals:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -296,53 +321,75 @@ Int.equals:
 
 	leal boolean_true, %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 Int.equals.false:
 	leal boolean_false, %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl String.equals
 String.equals:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
-	call runtime.TODO
+	movl 8(%ebp), %eax
+	test %eax, %eax
+	jz String.equals.false
+	cmpl $tag_of_String, tag_offset(%eax)
+	jne String.equals.false
 
-	pop %ebp
+	movl offset_of_String.length(%eax), %ebx
+	movl offset_of_Int.value(%ebx), %ebx
+	movl 12(%ebp), %edx
+	movl offset_of_String.length(%edx), %ecx
+	cmpl %ebx, offset_of_Int.value(%ecx)
+	jne String.equals.false
+
+	movl %ebx, %ecx
+	leal offset_of_String.str_field(%eax), %esi
+	leal offset_of_String.str_field(%edx), %edi
+	cld
+	repe cmpsb
+	jne String.equals.false
+
+	lea boolean_true, %eax
+
+	leave
+	ret $8
+
+String.equals.false:
+	lea boolean_false, %eax
+
+	leave
 	ret $8
 
 .globl String.concat
 String.concat:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	call runtime.TODO
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl String.substring
 String.substring:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	call runtime.TODO
 
-	pop %ebp
+	leave
 	ret $12
 
 .globl String.charAt
 String.charAt:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	call runtime.TODO
 
-	pop %ebp
+	leave
 	ret $8
 
 ArrayAny._check_bounds:
@@ -357,14 +404,13 @@ ArrayAny._check_bounds:
 
 	shll $2, %edx
 	addl %edx, %eax
-	leal data_offset(%eax), %eax
+	leal offset_of_ArrayAny.array_field(%eax), %eax
 
 	ret
 
 .globl ArrayAny.get
 ArrayAny.get:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 12(%ebp), %eax
 	movl 8(%ebp), %ebx
@@ -372,13 +418,12 @@ ArrayAny.get:
 
 	movl (%eax), %eax
 
-	pop %ebp
+	leave
 	ret $8
 
 .globl ArrayAny.set
 ArrayAny.set:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 16(%ebp), %eax
 	movl 12(%ebp), %ebx
@@ -389,13 +434,12 @@ ArrayAny.set:
 	movl %ecx, (%eax)
 	movl %ebx, %eax
 
-	pop %ebp
+	leave
 	ret $12
 
 .globl ArrayAny.ArrayAny
 ArrayAny.ArrayAny:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 	movl offset_of_Int.value(%eax), %eax
@@ -418,7 +462,7 @@ ArrayAny.ArrayAny.done:
 	movl 8(%ebp), %ebx
 	movl %ebx, offset_of_ArrayAny.length(%eax)
 
-	pop %ebp
+	leave
 	ret $8
 
 ArrayAny.ArrayAny.small:

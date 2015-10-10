@@ -157,15 +157,11 @@ func (c *Class) genCode(w io.Writer) {
 			fmt.Fprintf(w, "\n")
 			fmt.Fprintf(w, ".globl %s.%s\n", c.Type.Name, m.Name.Name)
 			fmt.Fprintf(w, "%s.%s:\n", c.Type.Name, m.Name.Name)
-			fmt.Fprintf(w, "\tpush %%ebp\n")
-			fmt.Fprintf(w, "\tmovl %%esp, %%ebp\n")
 			for i, a := range m.Args {
 				a.Offset = i*4 + 8
 			}
 			vars := m.Body.genCountVars(len(m.Args)*4 + 8)
-			if vars != 0 {
-				fmt.Fprintf(w, "\tsubl $%d, %%esp\n", vars*4)
-			}
+			fmt.Fprintf(w, "\tenter $%d, $0\n", vars*4)
 			varsUsed := 0
 			label := 0
 			m.Body.genCode(w, func() string {
@@ -184,10 +180,7 @@ func (c *Class) genCode(w io.Writer) {
 					varsUsed--
 				}
 			})
-			if vars != 0 {
-				fmt.Fprintf(w, "\taddl $%d, %%esp\n", vars*4)
-			}
-			fmt.Fprintf(w, "\tpop %%ebp\n")
+			fmt.Fprintf(w, "\tleave\n")
 			fmt.Fprintf(w, "\tret $%d\n", len(m.Args)*4+4)
 		}
 	}

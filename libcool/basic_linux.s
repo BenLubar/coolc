@@ -4,8 +4,7 @@
 
 .globl runtime.exit
 runtime.exit:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl $1, %eax
 	movl 8(%ebp), %ebx
@@ -13,8 +12,7 @@ runtime.exit:
 
 .globl runtime.output
 runtime.output:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl 8(%ebp), %eax
 
@@ -26,31 +24,29 @@ runtime.output:
 	movl $1, %ebx
 	int $0x80
 
-	pop %ebp
+	leave
 	ret $4
 
 .globl runtime.heap_get
 runtime.heap_get:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl $45, %eax
 	movl $0, %ebx
 	int $0x80
 
-	pop %ebp
+	leave
 	ret $0
 
 .globl runtime.heap_set
 runtime.heap_set:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl $45, %eax
 	movl 8(%ebp), %ebx
 	int $0x80
 
-	pop %ebp
+	leave
 	ret $4
 
 .data
@@ -69,8 +65,7 @@ case_panic_after:
 
 .globl runtime.case_panic
 runtime.case_panic:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl class_names(%eax), %eax
 	push %eax
@@ -104,8 +99,7 @@ null_panic_before:
 
 .globl runtime.null_panic
 runtime.null_panic:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl $4, %eax
 	movl $1, %ebx
@@ -128,8 +122,7 @@ bounds_panic_before:
 
 .globl runtime.bounds_panic
 runtime.bounds_panic:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	movl $4, %eax
 	movl $1, %ebx
@@ -143,8 +136,7 @@ runtime.bounds_panic:
 
 .globl runtime.TODO
 runtime.TODO:
-	push %ebp
-	movl %esp, %ebp
+	enter $0, $0
 
 	int $3
 
