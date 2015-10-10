@@ -3,3 +3,5 @@ coolc.exe
 *.o
 libcool/noop.s
 libcool/noop
+libcool/hello.s
+libcool/hello

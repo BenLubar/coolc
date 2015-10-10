@@ -31,6 +31,8 @@ func (p *Program) CodeGen(w io.Writer) {
 	nullClassID := addString("Null")
 	p.genCollectLiterals(addInt, addString)
 
+	fmt.Fprintf(w, ".include \"basic_defs.s\"\n")
+	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".data\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".globl boolean_false\n")
@@ -83,6 +85,7 @@ func (p *Program) CodeGen(w io.Writer) {
 		for _, m := range c.Methods {
 			fmt.Fprintf(w, "\t.long %s.%s\n", m.Parent.Type.Name, m.Name.Name)
 		}
+		fmt.Fprintf(w, "\n")
 	}
 
 	fmt.Fprintf(w, ".globl class_names\n")
@@ -108,7 +111,6 @@ func (p *Program) CodeGen(w io.Writer) {
 	}
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".text\n")
-	fmt.Fprintf(w, "\n")
 	for _, c := range p.Ordered {
 		c.genCode(w)
 	}
@@ -155,6 +157,8 @@ func (c *Class) genCode(w io.Writer) {
 			fmt.Fprintf(w, "\n")
 			fmt.Fprintf(w, ".globl %s.%s\n", c.Type.Name, m.Name.Name)
 			fmt.Fprintf(w, "%s.%s:\n", c.Type.Name, m.Name.Name)
+			fmt.Fprintf(w, "\tpush %%ebp\n")
+			fmt.Fprintf(w, "\tmovl %%esp, %%ebp\n")
 			for i, a := range m.Args {
 				a.Offset = i*4 + 8
 			}
@@ -183,7 +187,8 @@ func (c *Class) genCode(w io.Writer) {
 			if vars != 0 {
 				fmt.Fprintf(w, "\taddl $%d, %%esp\n", vars*4)
 			}
-			fmt.Fprintf(w, "\tret\n")
+			fmt.Fprintf(w, "\tpop %%ebp\n")
+			fmt.Fprintf(w, "\tret $%d\n", len(m.Args)*4+4)
 		}
 	}
 }
@@ -548,6 +553,8 @@ func (e *DynamicCallExpr) genCountVars(this int) int {
 
 func (e *DynamicCallExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	e.Recv.genCode(w, label, slot)
+	fmt.Fprintf(w, "\ttest %%eax, %%eax\n")
+	fmt.Fprintf(w, "\tjz runtime.null_panic\n")
 	fmt.Fprintf(w, "\tpush %%eax\n")
 	for _, a := range e.Args {
 		a.genCode(w, label, slot)
@@ -555,9 +562,10 @@ func (e *DynamicCallExpr) genCode(w io.Writer, label func() string, slot func() 
 	}
 	fmt.Fprintf(w, "\tmovl %d(%%esp), %%eax\n", len(e.Args)*4)
 	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
+	fmt.Fprintf(w, "\tshll $2, %%eax\n")
 	fmt.Fprintf(w, "\tmovl method_tables(%%eax), %%eax\n")
+	fmt.Fprintf(w, "\tmovl %d(%%eax), %%eax\n", e.Name.Method.Order*4)
 	fmt.Fprintf(w, "\tcall *%%eax\n")
-	fmt.Fprintf(w, "\taddl $%d, %%esp\n", len(e.Args)*4+4)
 }
 
 func (e *SuperCallExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -585,7 +593,6 @@ func (e *SuperCallExpr) genCode(w io.Writer, label func() string, slot func() (i
 		fmt.Fprintf(w, "\tpush %%eax\n")
 	}
 	fmt.Fprintf(w, "\tcall %s.%s\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
-	fmt.Fprintf(w, "\taddl $%d, %%esp\n", len(e.Args)*4+4)
 }
 
 func (e *StaticCallExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -613,7 +620,6 @@ func (e *StaticCallExpr) genCode(w io.Writer, label func() string, slot func() (
 		fmt.Fprintf(w, "\tpush %%eax\n")
 	}
 	fmt.Fprintf(w, "\tcall %s.%s\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
-	fmt.Fprintf(w, "\taddl $%d, %%esp\n", len(e.Args)*4+4)
 }
 
 func (e *AllocExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {

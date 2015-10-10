@@ -1,3 +1,5 @@
+.include "basic_defs.s"
+
 .data
 
 .align 2
@@ -14,15 +16,6 @@ gc_heap_end:
 symbol:
 	.long 0
 
-.globl tag_offset
-.set tag_offset, 4*0
-.globl size_offset
-.set size_offset, 4*1
-.globl ref_offset
-.set ref_offset, 4*2
-.globl data_offset
-.set data_offset, 4*3
-
 .set gc_increase_heap_size, 0x1000
 
 .text
@@ -33,16 +26,15 @@ gc_init:
 	movl %eax, gc_heap_end
 	movl %eax, gc_heap_alloc
 	call gc_increase_heap
-	ret
+	ret $0
 
 gc_increase_heap:
 	movl gc_heap_end, %eax
 	addl $gc_increase_heap_size, %eax
 	push %eax
 	call runtime.heap_set
-	addl 4, %esp
 	movl %eax, gc_heap_end
-	ret
+	ret $0
 
 .globl gc_alloc
 gc_alloc:
@@ -127,13 +119,12 @@ gc_alloc.found:
 	movl %ebx, tag_offset(%eax)
 	movl %ecx, size_offset(%eax)
 	movl $0, ref_offset(%eax)
-	movl %eax, %edx
+	leal data_offset(%eax), %edi
 	movl %eax, %ebx
-	addl $data_offset, %edx
 	movb $0, %al
 	rep stosb
 	movl %ebx, %eax
-	ret
+	ret $0
 
 .globl _start
 _start:
@@ -145,7 +136,6 @@ _start:
 
 	push %eax
 	call Main.Main
-	addl $4, %esp
 
 	push $0
 	call runtime.exit
@@ -155,7 +145,7 @@ Any.toString:
 	movl 8(%ebp), %eax
 	movl tag_offset(%eax), %eax
 	movl class_names(%eax), %eax
-	ret
+	ret $4
 
 .globl Any.equals
 Any.equals:
@@ -166,55 +156,222 @@ Any.equals:
 	je Any.equals.false
 
 	leal boolean_true, %eax
-	ret
+	ret $8
 
 Any.equals.false:
 	leal boolean_false, %eax
-	ret
+	ret $8
 
 .globl IO.abort
 IO.abort:
 	movl 8(%ebp), %eax
 	push %eax
 	call runtime.output
-	addl $4, %esp
 
 	push $1
 	call runtime.exit
 
 .globl IO.out
 IO.out:
+	push %ebp
+	movl %esp, %ebp
+
 	movl 8(%ebp), %eax
 	push %eax
 	call runtime.output
-	addl $4, %esp
 
 	movl 12(%ebp), %eax
-	ret
 
+	pop %ebp
+	ret $8
+
+// TODO: IO.in
 .globl IO.in
 IO.in:
+	push %ebp
+	movl %esp, %ebp
+
+	movl $0, %eax
+
+	pop %ebp
+	ret $4
+
 .globl IO.symbol
 IO.symbol:
+	push %ebp
+	movl %esp, %ebp
+
+	movl 8(%ebp), %eax
+	test %eax, %eax
+	jz runtime.null_panic
+
+	lea symbol, %ebx
+	movl symbol, %ecx
+	movl $0, %edx
+
+IO.symbol.loop:
+	test %ecx, %ecx
+	jz IO.symbol.notfound
+
+	push %ebx
+	push %ecx
+	push %edx
+	movl 8(%ebp), %eax
+	push %eax
+	movl offset_of_Symbol.name(%ecx), %eax
+	push %eax
+	call String.equals
+	addl $8, %esp
+	lea boolean_true, %ebx
+	cmpl %ebx, %eax
+	je IO.symbol.found
+	pop %edx
+	pop %ecx
+	pop %ebx
+
+	lea offset_of_Symbol.next(%ecx), %ebx
+	movl offset_of_Symbol.next(%ecx), %ecx
+	incl %edx
+	jmp IO.symbol.loop
+
+IO.symbol.notfound:
+	push %ebx
+	push %edx
+	movl $(size_of_Int + 4), %eax
+	movl $tag_of_Int, %ebx
+	call gc_alloc
+	pop %edx
+	movl %edx, offset_of_Int.value(%eax)
+	push %eax
+	movl $size_of_Symbol, %eax
+	movl $tag_of_Symbol, %ebx
+	call gc_alloc
+	pop %edx
+	movl %edx, offset_of_Symbol.hash(%eax)
+	movl 8(%ebp), %ecx
+	movl %ecx, offset_of_Symbol.name(%eax)
+	pop %ebx
+	movl %eax, (%ebx)
+
+	pop %ebp
+	ret $8
+
+IO.symbol.found:
+	pop %edx
+	pop %ecx
+	pop %ebx
+	movl %ecx, %eax
+
+	pop %ebp
+	ret $8
+
 .globl IO.symbol_name
 IO.symbol_name:
-.globl Int.toString
-Int.toString:
+	push %ebp
+	movl %esp, %ebp
+
+	movl 8(%ebp), %eax
+	test %eax, %eax
+	jz runtime.null_panic
+	movl offset_of_Symbol.name(%eax), %eax
+
+	pop %ebp
+	ret $8
+
 .globl Int.equals
 Int.equals:
-.globl Boolean.equals
-Boolean.equals:
+	push %ebp
+	movl %esp, %ebp
+
+	movl 8(%ebp), %eax
+	test %eax, %eax
+	jz Int.equals.false
+	movl tag_offset(%eax), %ebx
+	cmpl $tag_of_Int, %ebx
+	jne Int.equals.false
+	movl 12(%ebp), %ebx
+	movl offset_of_Int.value(%eax), %eax
+	movl offset_of_Int.value(%ebx), %ebx
+	cmpl %eax, %ebx
+	jne Int.equals.false
+
+	leal boolean_true, %eax
+
+	pop %ebp
+	ret $8
+
+Int.equals.false:
+	leal boolean_false, %eax
+
+	pop %ebp
+	ret $8
+
 .globl String.equals
 String.equals:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $8
+
 .globl String.concat
 String.concat:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $8
+
 .globl String.substring
 String.substring:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $12
+
 .globl String.charAt
 String.charAt:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $8
+
 .globl ArrayAny.get
 ArrayAny.get:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $8
+
 .globl ArrayAny.set
 ArrayAny.set:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $12
+
 .globl ArrayAny.ArrayAny
 ArrayAny.ArrayAny:
+	push %ebp
+	movl %esp, %ebp
+
+	call runtime.TODO
+
+	pop %ebp
+	ret $8

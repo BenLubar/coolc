@@ -516,11 +516,7 @@ func (f *Method) semantTypes(lookup func(*Ident), c *Class) {
 			return
 		case c.Type.Name == "IO" && f.Name.Name == "symbol_name":
 			return
-		case c.Type.Name == "Int" && f.Name.Name == "toString":
-			return
 		case c.Type.Name == "Int" && f.Name.Name == "equals":
-			return
-		case c.Type.Name == "Boolean" && f.Name.Name == "equals":
 			return
 		case c.Type.Name == "String" && f.Name.Name == "equals":
 			return

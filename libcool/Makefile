@@ -1,4 +1,7 @@
-noop: basic.o basic_linux.o noop.o
+.PHONY: all
+all: noop hello
+
+%: basic.o basic_linux.o %.o
 	ld -melf_i386 -o $@ --start-group $^
 
 %.o: %.s

@@ -72,7 +72,30 @@ class Int() {
   var value = native;
 
   /** Convert to a string representation */
-  override def toString() : String = native;
+  override def toString() : String =
+    if (this < 0)
+      "-".concat({
+        var n : Int = -this;
+        if (n < 0)
+          "214743648"
+        else
+          n.toString()
+      })
+    else {
+      var digits : String = "0123456789";
+      var s : String = "";
+      var n : Int = this;
+      while (0 < n) {
+        var n10 : Int = n / 10;
+        var d : Int = n - n10 * 10;
+        s = digits.substring(d, d + 1).concat(s);
+        n = n10
+      };
+      if (s.length() == 0)
+        "0"
+      else
+        s
+    };
 
   /** Return true if the argument is an int with the same value */
   override def equals(other : Any) : Boolean = native;
@@ -87,10 +110,6 @@ class Boolean() {
 
   /** Convert to a string representation */
   override def toString() : String = if (this) "true" else "false";
-
-  /** Return true if the argument is a boolean with the same value */
-  override def equals(other : Any) : Boolean = native;
-
 }
 
 /** The class of strings: fixed sequences of characters.
