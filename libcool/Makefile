@@ -1,8 +1,8 @@
 noop: basic.o basic_linux.o noop.o
-	ld -melf_i386 -o $@ $^
+	ld -melf_i386 -o $@ --start-group $^
 
 %.o: %.s
-	as -32 -o $@ $<
+	as -32 -g --fatal-warnings -o $@ $<
 
 %.s: %.cool ../coolc
 	../coolc -o $@ $<

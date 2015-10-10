@@ -1,9 +1,16 @@
 package ast
 
-import "go/token"
+import (
+	"fmt"
+	"go/token"
+	"io"
+)
 
 type Program struct {
-	Classes  []*Class
+	Classes []*Class
+
+	Ordered []*Class
+
 	classMap map[string]*Class
 }
 
@@ -18,6 +25,8 @@ type Class struct {
 	Depth    int
 
 	Methods []*Method
+
+	NameID int
 }
 
 type Extends struct {
@@ -28,6 +37,16 @@ type Extends struct {
 type Formal struct {
 	Name *Ident
 	Type *Ident
+
+	Offset int
+}
+
+func (a *Formal) Base(this int) string {
+	return "%ebp"
+}
+
+func (a *Formal) Offs() string {
+	return fmt.Sprintf("%d", a.Offset)
 }
 
 type Feature interface {
@@ -42,6 +61,16 @@ type Attribute struct {
 	Name *Ident
 	Type *Ident
 	Init Expr
+
+	Parent *Class
+}
+
+func (a *Attribute) Base(this int) string {
+	return fmt.Sprintf("-%d(%%ebp)", this)
+}
+
+func (a *Attribute) Offs() string {
+	return fmt.Sprintf("offset_of_%s.%s", a.Parent.Type.Name, a.Name.Name)
 }
 
 type Method struct {
@@ -51,12 +80,18 @@ type Method struct {
 	Type     *Ident
 	Body     Expr
 
+	Parent *Class
+
 	Order int
 }
 
 type Expr interface {
 	semantTypes(func(*Ident), *Class)
 	semantIdentifiers(func(token.Pos, string), func(*Class, *Ident), func(...*Class) *Class, semantIdentifiers) *Class
+
+	genCollectLiterals(func(int32) int, func(string) int)
+	genCountVars(int) int
+	genCode(io.Writer, func() string, func() (int, func()))
 }
 
 type NotExpr struct {
@@ -109,6 +144,16 @@ type MatchExpr struct {
 	Pos   token.Pos
 	Left  Expr
 	Cases []*Case
+
+	Offset int
+}
+
+func (e *MatchExpr) Base(this int) string {
+	return "%ebp"
+}
+
+func (e *MatchExpr) Offs() string {
+	return fmt.Sprintf("%d", e.Offset)
 }
 
 type DynamicCallExpr struct {
@@ -123,6 +168,8 @@ type SuperCallExpr struct {
 	Args []Expr
 
 	Class *Class
+
+	This int
 }
 
 type StaticCallExpr struct {
@@ -140,6 +187,8 @@ type AssignExpr struct {
 	Expr Expr
 
 	Unit *Ident
+
+	This int
 }
 
 type VarExpr struct {
@@ -147,6 +196,16 @@ type VarExpr struct {
 	Type *Ident
 	Init Expr
 	Body Expr
+
+	Offset int
+}
+
+func (e *VarExpr) Base(this int) string {
+	return "%ebp"
+}
+
+func (e *VarExpr) Offs() string {
+	return fmt.Sprintf("%d", e.Offset)
 }
 
 type ChainExpr struct {
@@ -158,6 +217,8 @@ type ThisExpr struct {
 	Pos token.Pos
 
 	Class *Class
+
+	Offset int
 }
 
 type NullExpr struct {
@@ -172,6 +233,8 @@ type UnitExpr struct {
 
 type NameExpr struct {
 	Name *Ident
+
+	This int
 }
 
 type StringExpr struct {
@@ -198,11 +261,18 @@ type Case struct {
 	Tags []int
 }
 
+type Object interface {
+	Base(int) string
+	Offs() string
+}
+
 type Ident struct {
 	Name string
 	Pos  token.Pos
 
-	Object interface{}
+	Class  *Class
+	Method *Method
+	Object Object
 }
 
 type IntLit struct {
@@ -210,6 +280,8 @@ type IntLit struct {
 	Pos token.Pos
 
 	Class *Class
+
+	LitID int
 }
 
 type StringLit struct {
@@ -217,6 +289,8 @@ type StringLit struct {
 	Pos token.Pos
 
 	Class *Class
+
+	LitID int
 }
 
 type BoolLit struct {

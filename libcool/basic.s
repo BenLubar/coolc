@@ -2,31 +2,28 @@
 
 .align 2
 gc_heap_start:
-	.word 0
+	.long 0
+.align 2
 gc_heap_alloc:
-	.word 0
+	.long 0
+.align 2
 gc_heap_end:
-	.word 0
+	.long 0
 
-.globl this
-this:
-	.word 0
-
-gc_increase_heap_size:
-	.word 0x1000
+.align 2
+symbol:
+	.long 0
 
 .globl tag_offset
-tag_offset:
-	.word 0
+.set tag_offset, 4*0
 .globl size_offset
-size_offset:
-	.word 4
+.set size_offset, 4*1
 .globl ref_offset
-ref_offset:
-	.word 8
+.set ref_offset, 4*2
 .globl data_offset
-data_offset:
-	.word 12
+.set data_offset, 4*3
+
+.set gc_increase_heap_size, 0x1000
 
 .text
 
@@ -88,9 +85,31 @@ gc_alloc.use:
 	movl size_offset(%eax), %ecx
 	jmp gc_alloc.found
 
+gc_alloc.small:
+	push %eax
+	addl size_offset(%eax), %eax
+	addl $data_offset, %eax
+	cmpl $-1, tag_offset(%eax)
+	je gc_alloc.small_accept
+	cmpl $0, tag_offset(%eax)
+	je gc_alloc.small_accept
+	pop %eax
+
 gc_alloc.next:
 	addl size_offset(%eax), %eax
 	addl $data_offset, %eax
+
+	jmp gc_alloc.loop
+
+gc_alloc.small_accept:
+	push %ebx
+	movl size_offset(%eax), %ebx
+	addl $data_offset, %ebx
+
+	movl 4(%esp), %eax
+	addl %ebx, size_offset(%eax)
+	addl 0(%esp), %ebx
+	addl $8, %esp
 
 	jmp gc_alloc.loop
 
@@ -122,24 +141,24 @@ _start:
 	movl size_of_Main, %eax
 	movl tag_of_Main, %ebx
 	call gc_alloc
-	movl %eax, this
+	push %eax
 	call Main.Main
 	push $0
 	call runtime.exit
 
 .globl Any.toString
 Any.toString:
-	leal this, %eax
+	movl 8(%ebp), %eax
 	movl tag_offset(%eax), %eax
-	addl class_names, %eax
-	movl (%eax), %eax
+	movl class_names(%eax), %eax
 	ret
 
 .globl Any.equals
 Any.equals:
 	movl 8(%ebp), %eax
+	movl 12(%ebp), %ebx
 
-	test %eax, this
+	test %eax, %ebx
 	je Any.equals.false
 
 	leal boolean_true, %eax
@@ -151,7 +170,7 @@ Any.equals.false:
 
 .globl IO.abort
 IO.abort:
-	movl 8(%ebp), %eax
+	movl 12(%ebp), %eax
 	push %eax
 	call runtime.output
 	addl $4, %esp
@@ -161,12 +180,12 @@ IO.abort:
 
 .globl IO.out
 IO.out:
-	movl 8(%ebp), %eax
+	movl 12(%ebp), %eax
 	push %eax
 	call runtime.output
 	addl $4, %esp
 
-	movl this, %eax
+	movl 8(%ebp), %eax
 	ret
 
 .globl IO.in

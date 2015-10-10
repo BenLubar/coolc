@@ -72,9 +72,5 @@ func main() {
 	}
 	defer f.Close()
 
-	err = prog.CodeGen(f)
-	if err != nil {
-		fmt.Printf("%s: %v\n", *flagOutput, err)
-		os.Exit(2)
-	}
+	prog.CodeGen(f)
 }

@@ -80,12 +80,12 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 	for _, c := range p.Classes {
 		c.semantTypes(func(id *Ident) {
 			if c, ok := p.classMap[id.Name]; ok {
-				id.Object = c
+				id.Class = c
 				return
 			}
 
 			report(id.Pos, "use of undeclared class "+id.Name)
-			id.Object = errorClass
+			id.Class = errorClass
 		})
 	}
 
@@ -133,7 +133,7 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 			return t2 != nothingClass && t2 != boolean && t2 != int_ && t2 != unit
 		}
 		// S-Extends
-		for t := t1; t != nativeClass; t = t.Extends.Type.Object.(*Class) {
+		for t := t1; t != nativeClass; t = t.Extends.Type.Class {
 			if t == t2 {
 				return true
 			}
@@ -156,18 +156,18 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 			}
 			// G-Extends
 			for t1.Depth > t2.Depth {
-				t1 = t1.Extends.Type.Object.(*Class)
+				t1 = t1.Extends.Type.Class
 			}
 			for t2.Depth > t1.Depth {
-				t2 = t2.Extends.Type.Object.(*Class)
+				t2 = t2.Extends.Type.Class
 			}
 			for t1 != t2 {
 				if t1.Depth == 0 {
 					t1 = any
 					break
 				}
-				t1 = t1.Extends.Type.Object.(*Class)
-				t2 = t2.Extends.Type.Object.(*Class)
+				t1 = t1.Extends.Type.Class
+				t2 = t2.Extends.Type.Class
 			}
 		}
 
@@ -182,12 +182,11 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 			c.Depth = 1
 			free = append(free, c)
 		} else {
-			children[c.Extends.Type.Object.(*Class)] = append(children[c.Extends.Type.Object.(*Class)], c)
+			children[c.Extends.Type.Class] = append(children[c.Extends.Type.Class], c)
 		}
 	}
 
 	order := 0
-	var ordered []*Class
 	for len(free) != 0 {
 		c := free[0]
 
@@ -200,10 +199,10 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 
 		order++
 		c.Order = order
-		for p := c; p != nativeClass; p = p.Extends.Type.Object.(*Class) {
+		for p := c; p != nativeClass; p = p.Extends.Type.Class {
 			p.MaxOrder = order
 		}
-		ordered = append(ordered, c)
+		p.Ordered = append(p.Ordered, c)
 	}
 
 	for _, c := range p.Classes {
@@ -220,13 +219,13 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 		c.semantMakeConstructor(unit)
 	}
 
-	for _, c := range ordered {
+	for _, c := range p.Ordered {
 		c.semantMethods(report, less)
 	}
 
 	for _, c := range p.Classes {
 		c.semantIdentifiers(report, func(t1 *Class, id *Ident) {
-			t2 := id.Object.(*Class)
+			t2 := id.Class
 
 			if !less(t1, t2) {
 				report(id.Pos, "")
@@ -248,7 +247,7 @@ func (c *Class) semantTypes(lookup func(*Ident)) {
 	if c.Extends.Type.Name == "native" {
 		switch c.Type.Name {
 		case "Any", "Null", "Nothing":
-			c.Extends.Type.Object = nativeClass
+			c.Extends.Type.Class = nativeClass
 			return
 		}
 	}
@@ -267,6 +266,8 @@ func (c *Class) semantMakeConstructor(unit *Class) {
 					Name: "'" + f.Name.Name,
 				},
 			},
+
+			Parent: c,
 		}
 		f.Name = &Ident{
 			Pos:  f.Name.Pos,
@@ -295,9 +296,9 @@ func (c *Class) semantMakeConstructor(unit *Class) {
 					Expr: f.Init,
 
 					Unit: &Ident{
-						Pos:    f.Name.Pos,
-						Name:   "Unit",
-						Object: unit,
+						Pos:   f.Name.Pos,
+						Name:  "Unit",
+						Class: unit,
 					},
 				},
 				Expr: constructor,
@@ -322,7 +323,7 @@ func (c *Class) semantMakeConstructor(unit *Class) {
 			Pre: &StaticCallExpr{
 				Recv: &ThisExpr{
 					Pos:   c.Extends.Type.Pos,
-					Class: c.Extends.Type.Object.(*Class),
+					Class: c.Extends.Type.Class,
 				},
 				Name: &Ident{
 					Pos:  c.Extends.Type.Pos,
@@ -342,11 +343,13 @@ func (c *Class) semantMakeConstructor(unit *Class) {
 		Args: c.Formals,
 		Type: c.Type,
 		Body: constructor,
+
+		Parent: c,
 	})
 }
 
 func (c *Class) semantMethods(report func(token.Pos, string), less func(*Class, *Class) bool) {
-	parent := c.Extends.Type.Object.(*Class)
+	parent := c.Extends.Type.Class
 	c.Methods = make([]*Method, len(parent.Methods))
 	copy(c.Methods, parent.Methods)
 
@@ -401,14 +404,14 @@ func (c *Class) semantMethods(report func(token.Pos, string), less func(*Class, 
 						report(override.Name.Pos, "(parent declaration is here)")
 					} else {
 						for i, a := range m.Args {
-							if t1, t2 := a.Type, override.Args[i].Type; t1.Object.(*Class) != t2.Object.(*Class) {
+							if t1, t2 := a.Type, override.Args[i].Type; t1.Class != t2.Class {
 								report(t1.Pos, "invalid override: method "+c.Type.Name+"."+m.Name.Name+" has an incorrect argument type")
 								report(t2.Pos, "(parent declaration is here)")
 							}
 						}
 					}
 
-					if !less(m.Type.Object.(*Class), override.Type.Object.(*Class)) {
+					if !less(m.Type.Class, override.Type.Class) {
 						report(m.Type.Pos, "invalid override: method "+c.Type.Name+"."+m.Name.Name+" has incompatible return type "+m.Type.Name)
 						report(override.Type.Pos, "(parent return type is "+override.Type.Name+")")
 					}
@@ -421,7 +424,7 @@ func (c *Class) semantMethods(report func(token.Pos, string), less func(*Class, 
 type semantIdentifier struct {
 	Name   *Ident
 	Type   *Ident
-	Object interface{}
+	Object Object
 }
 
 type semantIdentifiers []*semantIdentifier
@@ -472,6 +475,8 @@ func (f *Init) semantTypes(lookup func(*Ident), c *Class) {
 }
 
 func (f *Attribute) semantTypes(lookup func(*Ident), c *Class) {
+	f.Parent = c
+
 	if _, ok := f.Init.(*NativeExpr); ok {
 		switch {
 		case c.Type.Name == "Int" && f.Name.Name == "value":
@@ -489,6 +494,8 @@ func (f *Attribute) semantTypes(lookup func(*Ident), c *Class) {
 }
 
 func (f *Method) semantTypes(lookup func(*Ident), c *Class) {
+	f.Parent = c
+
 	for _, a := range f.Args {
 		a.semantTypes(lookup, c)
 	}
@@ -564,7 +571,7 @@ func (e *NotExpr) semantTypes(lookup func(*Ident), c *Class) {
 
 func (e *NotExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Expr.semantIdentifiers(report, less, lub, ids), e.Boolean)
-	return e.Boolean.Object.(*Class)
+	return e.Boolean.Class
 }
 
 func (e *NegativeExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -574,7 +581,7 @@ func (e *NegativeExpr) semantTypes(lookup func(*Ident), c *Class) {
 
 func (e *NegativeExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Expr.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Int.Object.(*Class)
+	return e.Int.Class
 }
 
 func (e *IfExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -599,7 +606,7 @@ func (e *WhileExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *WhileExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Cond.semantIdentifiers(report, less, lub, ids), e.Boolean)
 	e.Body.semantIdentifiers(report, less, lub, ids)
-	return e.Unit.Object.(*Class)
+	return e.Unit.Class
 }
 
 func (e *LessOrEqualExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -612,7 +619,7 @@ func (e *LessOrEqualExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *LessOrEqualExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Boolean.Object.(*Class)
+	return e.Boolean.Class
 }
 
 func (e *LessThanExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -625,7 +632,7 @@ func (e *LessThanExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *LessThanExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Boolean.Object.(*Class)
+	return e.Boolean.Class
 }
 
 func (e *MultiplyExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -637,7 +644,7 @@ func (e *MultiplyExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *MultiplyExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Int.Object.(*Class)
+	return e.Int.Class
 }
 
 func (e *DivideExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -649,7 +656,7 @@ func (e *DivideExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *DivideExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Int.Object.(*Class)
+	return e.Int.Class
 }
 
 func (e *AddExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -661,7 +668,7 @@ func (e *AddExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *AddExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Int.Object.(*Class)
+	return e.Int.Class
 }
 
 func (e *SubtractExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -673,7 +680,7 @@ func (e *SubtractExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *SubtractExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	less(e.Left.semantIdentifiers(report, less, lub, ids), e.Int)
 	less(e.Right.semantIdentifiers(report, less, lub, ids), e.Int)
-	return e.Int.Object.(*Class)
+	return e.Int.Class
 }
 
 func (e *MatchExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -702,7 +709,7 @@ func (e *MatchExpr) semantIdentifiers(report func(token.Pos, string), less func(
 			possible[i] = true
 		}
 		// and all of left's parents
-		for p := left.Extends.Type.Object.(*Class); p != nativeClass; p = p.Extends.Type.Object.(*Class) {
+		for p := left.Extends.Type.Class; p != nativeClass; p = p.Extends.Type.Class {
 			possible[p.Order] = true
 		}
 	}
@@ -727,7 +734,7 @@ func (e *DynamicCallExpr) semantIdentifiers(report func(token.Pos, string), less
 
 	for _, m := range left.Methods {
 		if m.Name.Name == e.Name.Name {
-			e.Name.Object = m
+			e.Name.Method = m
 
 			if len(m.Args) != len(e.Args) {
 				report(e.Name.Pos, "wrong number of method arguments")
@@ -738,7 +745,7 @@ func (e *DynamicCallExpr) semantIdentifiers(report func(token.Pos, string), less
 				}
 			}
 
-			return m.Type.Object.(*Class)
+			return m.Type.Class
 		}
 	}
 
@@ -752,7 +759,7 @@ func (e *SuperCallExpr) semantTypes(lookup func(*Ident), c *Class) {
 		Name: c.Extends.Type.Name,
 	}
 	lookup(&i)
-	e.Class = i.Object.(*Class)
+	e.Class = i.Class
 	for _, a := range e.Args {
 		a.semantTypes(lookup, c)
 	}
@@ -761,7 +768,7 @@ func (e *SuperCallExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *SuperCallExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	for _, m := range e.Class.Methods {
 		if m.Name.Name == e.Name.Name {
-			e.Name.Object = m
+			e.Name.Method = m
 
 			if len(m.Args) != len(e.Args) {
 				report(e.Name.Pos, "wrong number of method arguments")
@@ -772,7 +779,7 @@ func (e *SuperCallExpr) semantIdentifiers(report func(token.Pos, string), less f
 				}
 			}
 
-			return m.Type.Object.(*Class)
+			return m.Type.Class
 		}
 	}
 
@@ -792,7 +799,7 @@ func (e *StaticCallExpr) semantIdentifiers(report func(token.Pos, string), less 
 
 	for _, f := range left.Features {
 		if m, ok := f.(*Method); ok && m.Name.Name == e.Name.Name {
-			e.Name.Object = m
+			e.Name.Method = m
 
 			if len(m.Args) != len(e.Args) {
 				report(e.Name.Pos, "wrong number of method arguments")
@@ -803,7 +810,7 @@ func (e *StaticCallExpr) semantIdentifiers(report func(token.Pos, string), less 
 				}
 			}
 
-			return m.Type.Object.(*Class)
+			return m.Type.Class
 		}
 	}
 
@@ -816,7 +823,7 @@ func (e *AllocExpr) semantTypes(lookup func(*Ident), c *Class) {
 }
 
 func (e *AllocExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
-	return e.Type.Object.(*Class)
+	return e.Type.Class
 }
 
 func (e *AssignExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -831,7 +838,7 @@ func (e *AssignExpr) semantIdentifiers(report func(token.Pos, string), less func
 		e.Name.Object = o.Object
 		less(e.Expr.semantIdentifiers(report, less, lub, ids), o.Type)
 	}
-	return e.Unit.Object.(*Class)
+	return e.Unit.Class
 }
 
 func (e *VarExpr) semantTypes(lookup func(*Ident), c *Class) {
@@ -887,7 +894,7 @@ func (e *UnitExpr) semantTypes(lookup func(*Ident), c *Class) {
 		Name: "Unit",
 	}
 	lookup(&i)
-	e.Class = i.Object.(*Class)
+	e.Class = i.Class
 }
 
 func (e *UnitExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
@@ -900,7 +907,7 @@ func (e *NameExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *NameExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	if o := ids.Lookup(e.Name.Name); o != nil {
 		e.Name.Object = o.Object
-		return o.Type.Object.(*Class)
+		return o.Type.Class
 	}
 	report(e.Name.Pos, "undeclared identifier "+e.Name.Name)
 	return nothingClass
@@ -947,7 +954,7 @@ func (l *IntLit) semantTypes(lookup func(*Ident), c *Class) {
 		Name: "Int",
 	}
 	lookup(&i)
-	l.Class = i.Object.(*Class)
+	l.Class = i.Class
 }
 
 func (l *StringLit) semantTypes(lookup func(*Ident), c *Class) {
@@ -956,7 +963,7 @@ func (l *StringLit) semantTypes(lookup func(*Ident), c *Class) {
 		Name: "String",
 	}
 	lookup(&i)
-	l.Class = i.Object.(*Class)
+	l.Class = i.Class
 }
 
 func (l *BoolLit) semantTypes(lookup func(*Ident), c *Class) {
@@ -965,7 +972,7 @@ func (l *BoolLit) semantTypes(lookup func(*Ident), c *Class) {
 		Name: "Boolean",
 	}
 	lookup(&i)
-	l.Class = i.Object.(*Class)
+	l.Class = i.Class
 }
 
 func (a *Case) semantTypes(lookup func(*Ident), c *Class) {
@@ -974,7 +981,7 @@ func (a *Case) semantTypes(lookup func(*Ident), c *Class) {
 }
 
 func (a *Case) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers, m *MatchExpr, possible map[int]bool) *Class {
-	left := a.Type.Object.(*Class)
+	left := a.Type.Class
 	any := false
 
 	check := func(i int) {
