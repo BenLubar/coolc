@@ -138,11 +138,15 @@ gc_alloc.found:
 .globl _start
 _start:
 	call gc_init
-	movl size_of_Main, %eax
-	movl tag_of_Main, %ebx
+
+	movl $size_of_Main, %eax
+	movl $tag_of_Main, %ebx
 	call gc_alloc
+
 	push %eax
 	call Main.Main
+	addl $4, %esp
+
 	push $0
 	call runtime.exit
 
@@ -170,7 +174,7 @@ Any.equals.false:
 
 .globl IO.abort
 IO.abort:
-	movl 12(%ebp), %eax
+	movl 8(%ebp), %eax
 	push %eax
 	call runtime.output
 	addl $4, %esp
@@ -180,12 +184,12 @@ IO.abort:
 
 .globl IO.out
 IO.out:
-	movl 12(%ebp), %eax
+	movl 8(%ebp), %eax
 	push %eax
 	call runtime.output
 	addl $4, %esp
 
-	movl 8(%ebp), %eax
+	movl 12(%ebp), %eax
 	ret
 
 .globl IO.in
