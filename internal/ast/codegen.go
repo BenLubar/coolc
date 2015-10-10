@@ -28,6 +28,10 @@ func (p *Program) CodeGen(w io.Writer) {
 		stringLengths = append(stringLengths, addInt(int32(len(x))))
 		return len(strings) - 1
 	}
+	var byteIntIDs [256]int
+	for i := range byteIntIDs {
+		byteIntIDs[i] = addInt(int32(i))
+	}
 	nullClassID := addString("Null")
 	p.genCollectLiterals(addInt, addString)
 
@@ -78,6 +82,14 @@ func (p *Program) CodeGen(w io.Writer) {
 		}
 		fmt.Fprintf(w, "\n")
 	}
+
+	fmt.Fprintf(w, ".globl byte_ints\n")
+	fmt.Fprintf(w, ".align 2\n")
+	fmt.Fprintf(w, "byte_ints:\n")
+	for _, x := range byteIntIDs {
+		fmt.Fprintf(w, "\t.long int_lit_%d\n", x)
+	}
+	fmt.Fprintf(w, "\n")
 
 	for _, c := range p.Ordered {
 		fmt.Fprintf(w, ".align 2\n")

@@ -374,6 +374,16 @@ String.concat:
 	leave
 	ret $8
 
+String._check_bounds:
+	movl offset_of_String.length(%eax), %ecx
+	movl offset_of_Int.value(%ecx), %ecx
+	movl offset_of_Int.value(%ebx), %edx
+
+	cmpl %edx, %ecx
+	jbe runtime.bounds_panic
+
+	ret
+
 .globl String.substring
 String.substring:
 	enter $0, $0
@@ -387,7 +397,12 @@ String.substring:
 String.charAt:
 	enter $0, $0
 
-	call runtime.TODO
+	movl 12(%ebp), %eax
+	movl 8(%ebp), %ebx
+	call String._check_bounds
+
+	shll $2, %edx
+	movl byte_ints(%edx), %eax
 
 	leave
 	ret $8
@@ -397,10 +412,8 @@ ArrayAny._check_bounds:
 	movl offset_of_Int.value(%ecx), %ecx
 	movl offset_of_Int.value(%ebx), %edx
 
-	cmpl $0, %edx
-	jl runtime.bounds_panic
 	cmpl %edx, %ecx
-	jle runtime.bounds_panic
+	jbe runtime.bounds_panic
 
 	shll $2, %edx
 	addl %edx, %eax
