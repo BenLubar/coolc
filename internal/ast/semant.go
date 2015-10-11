@@ -223,15 +223,31 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 		c.semantMethods(report, less)
 	}
 
-	for _, c := range p.Classes {
-		c.semantIdentifiers(report, func(t1 *Class, id *Ident) {
-			t2 := id.Class
+	less_report := func(t1 *Class, id *Ident) {
+		t2 := id.Class
 
-			if !less(t1, t2) {
-				report(id.Pos, "")
-			}
-		}, lub)
+		if !less(t1, t2) {
+			report(id.Pos, "type "+t1.Type.Name+" does not conform to type "+t2.Type.Name)
+		}
 	}
+	for _, c := range p.Classes {
+		c.semantIdentifiers(report, less_report, lub)
+	}
+
+	p.Main = &StaticCallExpr{
+		Recv: &AllocExpr{
+			Type: &Ident{
+				Pos:   token.NoPos,
+				Name:  "Main",
+				Class: main,
+			},
+		},
+		Name: &Ident{
+			Pos:  token.NoPos,
+			Name: "Main",
+		},
+	}
+	p.Main.semantIdentifiers(report, less_report, lub, nil)
 
 	return
 }
@@ -438,20 +454,40 @@ func (ids semantIdentifiers) Lookup(name string) *semantIdentifier {
 	return nil
 }
 
+func (c *Class) semantInheritedIdentifiers() semantIdentifiers {
+	if c == nativeClass {
+		return nil
+	}
+
+	ids := c.Extends.Type.Class.semantInheritedIdentifiers()
+	for _, f := range c.Features {
+		if a, ok := f.(*Attribute); ok {
+			ids = append(ids, &semantIdentifier{
+				Name:   a.Name,
+				Type:   a.Type,
+				Object: a,
+			})
+		}
+	}
+	return ids
+}
+
 func (c *Class) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class) {
-	var ids semantIdentifiers
+	ids := c.Extends.Type.Class.semantInheritedIdentifiers()
+	used := make(map[string]token.Pos)
 	for _, f := range c.Features {
 		if a, ok := f.(*Attribute); ok {
 			a.Name.Object = a
-			if o := ids.Lookup(a.Name.Name); o != nil {
+			if pos, ok := used[a.Name.Name]; ok {
 				report(a.Name.Pos, "duplicate declaration of "+a.Name.Name)
-				report(o.Name.Pos, "(previous declaration was here)")
+				report(pos, "(previous declaration was here)")
 			} else {
 				ids = append(ids, &semantIdentifier{
 					Name:   a.Name,
 					Type:   a.Type,
 					Object: a,
 				})
+				used[a.Name.Name] = a.Name.Pos
 			}
 		}
 	}

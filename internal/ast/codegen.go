@@ -18,6 +18,7 @@ func (p *Program) CodeGen(w io.Writer) {
 		ints = append(ints, x)
 		return len(ints) - 1
 	}
+	addInt(0) // int_lit_0 must be 0
 	addString := func(x string) int {
 		for i, y := range strings {
 			if x == y {
@@ -123,6 +124,9 @@ func (p *Program) CodeGen(w io.Writer) {
 	}
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".text\n")
+
+	genMethod(w, "main", 0, p.Main)
+
 	for _, c := range p.Ordered {
 		c.genCode(w)
 	}
@@ -147,16 +151,46 @@ func (c *Class) genCollectLiterals(ints func(int32) int, strings func(string) in
 func (c *Class) genConstants(w io.Writer) {
 	fmt.Fprintf(w, ".globl tag_of_%s\n", c.Type.Name)
 	fmt.Fprintf(w, ".set tag_of_%s, %d\n", c.Type.Name, c.Order)
-	sizeOf := 0
+	c.Size = c.Extends.Type.Class.Size
 	for _, f := range c.Features {
 		if a, ok := f.(*Attribute); ok {
 			fmt.Fprintf(w, ".globl offset_of_%s.%s\n", c.Type.Name, a.Name.Name)
-			fmt.Fprintf(w, ".set offset_of_%s.%s, data_offset + %d\n", c.Type.Name, a.Name.Name, sizeOf)
-			sizeOf += 4
+			fmt.Fprintf(w, ".set offset_of_%s.%s, data_offset + %d\n", c.Type.Name, a.Name.Name, c.Size)
+			if _, ok := a.Init.(*NativeExpr); !ok {
+				c.Size += 4
+			}
 		}
 	}
 	fmt.Fprintf(w, ".globl size_of_%s\n", c.Type.Name)
-	fmt.Fprintf(w, ".set size_of_%s, %d\n", c.Type.Name, sizeOf)
+	fmt.Fprintf(w, ".set size_of_%s, %d\n", c.Type.Name, c.Size)
+}
+
+func genMethod(w io.Writer, name string, args int, body Expr) {
+	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, ".globl %s\n", name)
+	fmt.Fprintf(w, "%s:\n", name)
+	vars := body.genCountVars(args*4 + 8)
+	fmt.Fprintf(w, "\tenter $%d, $0\n", vars*4)
+	varsUsed := 0
+	label := 0
+	body.genCode(w, func() string {
+		label++
+		return fmt.Sprintf("%d", label)
+	}, func() (int, func()) {
+		if vars == varsUsed {
+			panic("INTERNAL ERROR: too many vars")
+		}
+		varsUsed++
+		n := varsUsed
+		return -n * 4, func() {
+			if varsUsed != n {
+				panic("INTERNAL ERROR: missed var release")
+			}
+			varsUsed--
+		}
+	})
+	fmt.Fprintf(w, "\tleave\n")
+	fmt.Fprintf(w, "\tret $%d\n", args*4+4)
 }
 
 func (c *Class) genCode(w io.Writer) {
@@ -166,34 +200,10 @@ func (c *Class) genCode(w io.Writer) {
 				continue
 			}
 
-			fmt.Fprintf(w, "\n")
-			fmt.Fprintf(w, ".globl %s.%s\n", c.Type.Name, m.Name.Name)
-			fmt.Fprintf(w, "%s.%s:\n", c.Type.Name, m.Name.Name)
 			for i, a := range m.Args {
-				a.Offset = i*4 + 8
+				a.Offset = (len(m.Args)-i)*4 + 4
 			}
-			vars := m.Body.genCountVars(len(m.Args)*4 + 8)
-			fmt.Fprintf(w, "\tenter $%d, $0\n", vars*4)
-			varsUsed := 0
-			label := 0
-			m.Body.genCode(w, func() string {
-				label++
-				return fmt.Sprintf("%s.%s.L%d", c.Type.Name, m.Name.Name, label)
-			}, func() (int, func()) {
-				if vars == varsUsed {
-					panic("INTERNAL ERROR: too many vars")
-				}
-				varsUsed++
-				n := varsUsed
-				return -n * 4, func() {
-					if varsUsed != n {
-						panic("INTERNAL ERROR: missed var release")
-					}
-					varsUsed--
-				}
-			})
-			fmt.Fprintf(w, "\tleave\n")
-			fmt.Fprintf(w, "\tret $%d\n", len(m.Args)*4+4)
+			genMethod(w, c.Type.Name+"."+m.Name.Name, len(m.Args), m.Body)
 		}
 	}
 }
@@ -214,9 +224,9 @@ func (e *NotExpr) genCode(w io.Writer, label func() string, slot func() (int, fu
 
 	fmt.Fprintf(w, "\tlea boolean_true, %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %s\n", label_false)
+	fmt.Fprintf(w, "\tje %sf\n", label_false)
 	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
-	fmt.Fprintf(w, "\tjmp %s\n", label_done)
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_false)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
 	fmt.Fprintf(w, "%s:\n", label_done)
@@ -268,9 +278,9 @@ func (e *IfExpr) genCode(w io.Writer, label func() string, slot func() (int, fun
 
 	fmt.Fprintf(w, "\tlea boolean_false, %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %s\n", label_false)
+	fmt.Fprintf(w, "\tje %sf\n", label_false)
 	e.Then.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tjmp %s\n", label_done)
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_false)
 	e.Else.genCode(w, label, slot)
 	fmt.Fprintf(w, "%s:\n", label_done)
@@ -297,9 +307,9 @@ func (e *WhileExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	e.Cond.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tlea boolean_false, %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %s\n", label_done)
+	fmt.Fprintf(w, "\tje %sf\n", label_done)
 	e.Body.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tjmp %s\n", label_cond)
+	fmt.Fprintf(w, "\tjmp %sb\n", label_cond)
 	fmt.Fprintf(w, "%s:\n", label_done)
 	fmt.Fprintf(w, "\tlea unit_lit, %%eax\n")
 }
@@ -328,9 +338,9 @@ func (e *LessOrEqualExpr) genCode(w io.Writer, label func() string, slot func() 
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tjle %s\n", label_true)
+	fmt.Fprintf(w, "\tjle %sf\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
-	fmt.Fprintf(w, "\tjmp %s\n", label_done)
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
 	fmt.Fprintf(w, "%s:\n", label_done)
@@ -360,9 +370,9 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tjl %s\n", label_true)
+	fmt.Fprintf(w, "\tjl %sf\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
-	fmt.Fprintf(w, "\tjmp %s\n", label_done)
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
 	fmt.Fprintf(w, "%s:\n", label_done)
@@ -482,8 +492,8 @@ func (e *SubtractExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tpop %%ebx\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
-	fmt.Fprintf(w, "\tsubl %%ebx, %%ecx\n")
-	fmt.Fprintf(w, "\tmovl %%ecx, offset_of_Int.value(%%eax)\n")
+	fmt.Fprintf(w, "\tsubl %%ecx, %%ebx\n")
+	fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
 }
 
 func (e *MatchExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -512,7 +522,7 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	e.Offset = offset
 	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
 	fmt.Fprintf(w, "\ttest %%eax, %%eax\n")
-	fmt.Fprintf(w, "\tjz %s\n", label_null)
+	fmt.Fprintf(w, "\tjz %sf\n", label_null)
 	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
 	fmt.Fprintf(w, "%s:\n", label_null)
 
@@ -524,7 +534,7 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	for i, c := range e.Cases {
 		for _, t := range c.Tags {
 			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", t)
-			fmt.Fprintf(w, "\tje %s\n", labels[i])
+			fmt.Fprintf(w, "\tje %sf\n", labels[i])
 		}
 	}
 	fmt.Fprintf(w, "\tjmp runtime.case_panic\n")
@@ -532,7 +542,7 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	for i, c := range e.Cases {
 		fmt.Fprintf(w, "%s:\n", labels[i])
 		c.genCode(w, label, slot)
-		fmt.Fprintf(w, "\tjmp %s\n", label_done)
+		fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	}
 
 	fmt.Fprintf(w, "%s:\n", label_done)
@@ -638,6 +648,30 @@ func (e *AllocExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	fmt.Fprintf(w, "\tmovl $size_of_%s, %%eax\n", e.Type.Name)
 	fmt.Fprintf(w, "\tmovl $tag_of_%s, %%ebx\n", e.Type.Name)
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
+	var gen func(c *Class)
+	gen = func(c *Class) {
+		if c == nativeClass {
+			return
+		}
+		gen(c.Extends.Type.Class)
+		for _, f := range c.Features {
+			if a, ok := f.(*Attribute); ok {
+				var sym string
+				switch a.Type.Name {
+				case "Int":
+					sym = "int_lit_0"
+				case "Boolean":
+					sym = "boolean_false"
+				case "Unit":
+					sym = "unit_lit"
+				default:
+					continue
+				}
+				fmt.Fprintf(w, "\tmovl $%s, offset_of_%s.%s(%%eax)\n", sym, c.Type.Name, a.Name.Name)
+			}
+		}
+	}
+	gen(e.Type.Class)
 }
 
 func (e *AssignExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {

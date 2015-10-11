@@ -11,6 +11,8 @@ type Program struct {
 
 	Ordered []*Class
 
+	Main Expr
+
 	classMap map[string]*Class
 }
 
@@ -26,6 +28,7 @@ type Class struct {
 
 	Methods []*Method
 
+	Size   int
 	NameID int
 }
 
@@ -66,7 +69,7 @@ type Attribute struct {
 }
 
 func (a *Attribute) Base(this int) string {
-	return fmt.Sprintf("-%d(%%ebp)", this)
+	return fmt.Sprintf("%d(%%ebp)", this)
 }
 
 func (a *Attribute) Offs() string {
