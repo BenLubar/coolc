@@ -17,6 +17,7 @@ symbol:
 	.long 0
 
 .set gc_increase_heap_size, 0x1000
+.set max_line_length, 0x400
 
 .text
 
@@ -205,7 +206,21 @@ IO.out:
 IO.in:
 	enter $0, $0
 
-	call runtime.TODO
+	movl $(size_of_Int + 4), %eax
+	movl $tag_of_Int, %ebx
+	call gc_alloc
+	movl $(size_of_String + max_line_length), offset_of_Int.value(%eax)
+	push %eax
+
+	movl $(size_of_String + max_line_length), %eax
+	movl $tag_of_String, %ebx
+	call gc_alloc
+
+	pop %ebx
+	movl %ebx, offset_of_String.length(%eax)
+
+	push %eax
+	call runtime.input
 
 	leave
 	ret $4
