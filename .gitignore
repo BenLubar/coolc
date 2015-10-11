@@ -1,9 +1,6 @@
 coolc
 coolc.exe
 *.o
-libcool/noop.s
-libcool/noop
-libcool/hello.s
-libcool/hello
-libcool/array.s
-libcool/array
+libcool/fizzbuzz.s
+libcool/fizzbuzz
+libcool/fizzbuzz.exe

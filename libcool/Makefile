@@ -1,5 +1,5 @@
 .PHONY: all
-all: noop hello array
+all: fizzbuzz
 
 %: basic.o basic_linux.o %.o
 	ld -melf_i386 -o $@ --start-group $^
