@@ -6,9 +6,6 @@
 gc_heap_start:
 	.long 0
 .align 2
-gc_heap_alloc:
-	.long 0
-.align 2
 gc_heap_end:
 	.long 0
 
@@ -25,7 +22,6 @@ gc_init:
 	call runtime.heap_get
 	movl %eax, gc_heap_start
 	movl %eax, gc_heap_end
-	movl %eax, gc_heap_alloc
 	call gc_increase_heap
 	ret $0
 
@@ -49,7 +45,7 @@ gc_alloc:
 
 1:
 	movl gc_heap_start, %eax
-	movl gc_heap_alloc, %edx
+	movl gc_heap_end, %edx
 	subl %ecx, %edx
 	subl $data_offset, %edx
 
