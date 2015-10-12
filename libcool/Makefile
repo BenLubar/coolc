@@ -1,7 +1,7 @@
 .PHONY: all
-all: libcool.a fizzbuzz.s fizzbuzz
+all: libcool.a
 
-fizzbuzz: libcool.a fizzbuzz.o
+%: libcool.a %.o
 	ld -melf_i386 -o $@ --start-group $^
 
 libcool.a: basic.o basic_linux.o

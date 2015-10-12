@@ -1,5 +1,5 @@
 coolc
 *.o
 libcool/libcool.a
-libcool/fizzbuzz.s
-libcool/fizzbuzz
+testdata/good*.s
+testdata/good*.exe

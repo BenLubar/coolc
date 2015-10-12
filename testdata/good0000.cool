@@ -1,0 +1,27 @@
+class Main() extends IO() {
+	{
+		var s : Sieve = new Sieve(2);
+		var i : Int = 2;
+		out_any(i).out("\n");
+		while (i < 1000) {
+			i = i + 1;
+			if (s.isPrime(i))
+				out_any(i).out("\n")
+			else
+				()
+		}
+	};
+}
+
+class Sieve(var prime : Int) extends IO() {
+	var next : Sieve = null;
+
+	def isPrime(x : Int) : Boolean =
+		if (x / prime * prime == x)
+			false
+		else if (is_null(next)) {
+			next = new Sieve(x);
+			true
+		} else
+			next.isPrime(x);
+}
