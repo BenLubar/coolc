@@ -1,6 +1,5 @@
 coolc
-coolc.exe
 *.o
+libcool/libcool.a
 libcool/fizzbuzz.s
 libcool/fizzbuzz
-libcool/fizzbuzz.exe

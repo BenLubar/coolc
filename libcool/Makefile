@@ -1,8 +1,11 @@
 .PHONY: all
-all: fizzbuzz
+all: libcool.a fizzbuzz.s fizzbuzz
 
-%: basic.o basic_linux.o %.o
+fizzbuzz: libcool.a fizzbuzz.o
 	ld -melf_i386 -o $@ --start-group $^
+
+libcool.a: basic.o basic_linux.o
+	ar rcs $@ $^
 
 %.o: %.s
 	as -32 -g --fatal-warnings -o $@ $<
