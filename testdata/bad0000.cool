@@ -1,0 +1,1 @@
+class Main() extends ArrayAny(1) {}

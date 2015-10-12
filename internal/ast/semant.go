@@ -454,12 +454,12 @@ func (ids semantIdentifiers) Lookup(name string) *semantIdentifier {
 	return nil
 }
 
-func (c *Class) semantInheritedIdentifiers() semantIdentifiers {
+func (c *Class) semantInheritedIdentifiers(report func(string)) semantIdentifiers {
 	if c == nativeClass {
 		return nil
 	}
 
-	ids := c.Extends.Type.Class.semantInheritedIdentifiers()
+	ids := c.Extends.Type.Class.semantInheritedIdentifiers(report)
 	for _, f := range c.Features {
 		if a, ok := f.(*Attribute); ok {
 			ids = append(ids, &semantIdentifier{
@@ -467,17 +467,25 @@ func (c *Class) semantInheritedIdentifiers() semantIdentifiers {
 				Type:   a.Type,
 				Object: a,
 			})
+			if _, ok := a.Init.(*NativeExpr); ok {
+				report("cannot extend " + c.Type.Name)
+			}
 		}
 	}
 	return ids
 }
 
 func (c *Class) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class) {
-	ids := c.Extends.Type.Class.semantInheritedIdentifiers()
+	ids := c.Extends.Type.Class.semantInheritedIdentifiers(func(s string) {
+		report(c.Extends.Type.Pos, s)
+	})
 	used := make(map[string]token.Pos)
 	for _, f := range c.Features {
 		if a, ok := f.(*Attribute); ok {
 			a.Name.Object = a
+			if a.Type.Class == nothingClass {
+				report(a.Type.Pos, "cannot declare attribute of type Nothing")
+			}
 			if pos, ok := used[a.Name.Name]; ok {
 				report(a.Name.Pos, "duplicate declaration of "+a.Name.Name)
 				report(pos, "(previous declaration was here)")

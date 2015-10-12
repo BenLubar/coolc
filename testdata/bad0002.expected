@@ -1,0 +1,2 @@
+testdata/bad0002.cool:3:7: class heirarchy loop: A
+testdata/bad0002.cool:5:7: class heirarchy loop: B

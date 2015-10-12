@@ -123,6 +123,9 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 	for {
 		offset, err = l.r.Seek(0, os.SEEK_CUR)
 		check(err)
+		// if r isn't ignored, our offset will be 1 byte too far. if it
+		// is, we'll come back to this line.
+		offset--
 		l.offset = int(offset)
 
 		if unicode.IsSpace(r) {

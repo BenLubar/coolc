@@ -1,0 +1,2 @@
+-: wrong number of method arguments
+testdata/bad0004.cool:1:7: (method is declared here)

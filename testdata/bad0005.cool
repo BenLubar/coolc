@@ -1,0 +1,3 @@
+class Main() extends IO() {
+	var x : Nothing = abort("");
+}

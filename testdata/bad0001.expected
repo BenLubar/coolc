@@ -1,0 +1,2 @@
+testdata/bad0001.cool:1:22: wrong number of method arguments
+basic.cool:26:7: (method is declared here)
