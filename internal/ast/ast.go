@@ -56,6 +56,10 @@ func (a *Formal) Stack() bool {
 	return true
 }
 
+func (a *Formal) RawInt() bool {
+	return false
+}
+
 type Feature interface {
 	semantTypes(func(*Ident), *Class)
 }
@@ -81,6 +85,10 @@ func (a *Attribute) Offs() string {
 }
 
 func (a *Attribute) Stack() bool {
+	return false
+}
+
+func (a *Attribute) RawInt() bool {
 	return false
 }
 
@@ -177,6 +185,10 @@ func (e *MatchExpr) Stack() bool {
 	return true
 }
 
+func (e *MatchExpr) RawInt() bool {
+	return false
+}
+
 type DynamicCallExpr struct {
 	Recv Expr
 	Name *Ident
@@ -231,6 +243,10 @@ func (e *VarExpr) Offs() string {
 
 func (e *VarExpr) Stack() bool {
 	return true
+}
+
+func (a *VarExpr) RawInt() bool {
+	return a.Type.Name == "Int"
 }
 
 type ChainExpr struct {
@@ -288,6 +304,7 @@ type Object interface {
 	Base(int) string
 	Offs() string
 	Stack() bool
+	RawInt() bool
 }
 
 type Ident struct {

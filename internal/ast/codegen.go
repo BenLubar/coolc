@@ -769,16 +769,32 @@ func (e *AssignExpr) genCountVars(this int) int {
 }
 
 func (e *AssignExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Expr.genCode(w, label, slot)
+	var rawInt bool
+	if e.Name.Object.RawInt() {
+		if a, ok := e.Expr.(ArithmeticExpr); ok {
+			rawInt = true
+			a.genCodeRawInt(w, label, slot)
+		}
+	}
+	if !rawInt {
+		e.Expr.genCode(w, label, slot)
+	}
 	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
 	if e.Name.Object.Stack() {
-		fmt.Fprintf(w, "\tmovl %s(%%edx), %%ebx\n", e.Name.Object.Offs())
-		genGC(w, "%ebx", label)
-	}
-	fmt.Fprintf(w, "\tmovl %%eax, %s(%%edx)\n", e.Name.Object.Offs())
-	if !e.Name.Object.Stack() {
+		if !e.Name.Object.RawInt() {
+			fmt.Fprintf(w, "\tmovl %s(%%edx), %%ebx\n", e.Name.Object.Offs())
+			genGC(w, "%ebx", label)
+		}
+	} else if !rawInt {
 		genGC(w, "%eax", label)
 	}
+	if e.Name.Object.RawInt() && !rawInt {
+		if e.Name.Object.Stack() {
+			genGC(w, "%eax", label)
+		}
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	fmt.Fprintf(w, "\tmovl %%eax, %s(%%edx)\n", e.Name.Object.Offs())
 	fmt.Fprintf(w, "\tleal unit_lit, %%eax\n")
 }
 
@@ -796,13 +812,28 @@ func (e *VarExpr) genCountVars(this int) int {
 }
 
 func (e *VarExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Init.genCode(w, label, slot)
+	var rawInt bool
+	if e.RawInt() {
+		if a, ok := e.Init.(ArithmeticExpr); ok {
+			rawInt = true
+			a.genCodeRawInt(w, label, slot)
+		}
+	}
+	if !rawInt {
+		e.Init.genCode(w, label, slot)
+		if e.RawInt() {
+			genGC(w, "%eax", label)
+			fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+		}
+	}
 	offset, unreserve := slot()
 	e.Offset = offset
 	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
 	e.Body.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
-	genGC(w, "%ebx", label)
+	if !e.RawInt() {
+		genGC(w, "%ebx", label)
+	}
 	unreserve()
 }
 
@@ -871,7 +902,24 @@ func (e *NameExpr) genCountVars(this int) int {
 func (e *NameExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
 	fmt.Fprintf(w, "\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
-	genRef(w, "%eax", label)
+	if e.Name.Object.RawInt() {
+		fmt.Fprintf(w, "\tpush %%eax\n")
+		fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
+		fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
+		fmt.Fprintf(w, "\tcall gc_alloc\n")
+		fmt.Fprintf(w, "\tpop %%ebx\n")
+		fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
+	} else {
+		genRef(w, "%eax", label)
+	}
+}
+
+func (e *NameExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
+	fmt.Fprintf(w, "\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
+	if !e.Name.Object.RawInt() {
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
 }
 
 func (e *StringExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
