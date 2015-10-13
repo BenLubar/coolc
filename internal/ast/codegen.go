@@ -811,7 +811,7 @@ func (e *VarExpr) genCountVars(this int) int {
 	return vars + 1
 }
 
-func (e *VarExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
+func (e *VarExpr) genCodeShared(w io.Writer, label func() string, slot func() (int, func()), returnRawInt bool) {
 	var rawInt bool
 	if e.RawInt() {
 		if a, ok := e.Init.(ArithmeticExpr); ok {
@@ -829,12 +829,30 @@ func (e *VarExpr) genCode(w io.Writer, label func() string, slot func() (int, fu
 	offset, unreserve := slot()
 	e.Offset = offset
 	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
-	e.Body.genCode(w, label, slot)
+	if returnRawInt {
+		if a, ok := e.Body.(ArithmeticExpr); ok {
+			a.genCodeRawInt(w, label, slot)
+		} else {
+			e.Body.genCode(w, label, slot)
+			genGC(w, "%eax", label)
+			fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+		}
+	} else {
+		e.Body.genCode(w, label, slot)
+	}
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
 	if !e.RawInt() {
 		genGC(w, "%ebx", label)
 	}
 	unreserve()
+}
+
+func (e *VarExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
+	e.genCodeShared(w, label, slot, false)
+}
+
+func (e *VarExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	e.genCodeShared(w, label, slot, true)
 }
 
 func (e *ChainExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -854,6 +872,18 @@ func (e *ChainExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	e.Pre.genCode(w, label, slot)
 	genGC(w, "%eax", label)
 	e.Expr.genCode(w, label, slot)
+}
+
+func (e *ChainExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	e.Pre.genCode(w, label, slot)
+	genGC(w, "%eax", label)
+	if a, ok := e.Expr.(ArithmeticExpr); ok {
+		a.genCodeRawInt(w, label, slot)
+	} else {
+		e.Expr.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
 }
 
 func (e *ThisExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
