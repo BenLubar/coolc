@@ -45,28 +45,28 @@ func (p *Program) CodeGen(w io.Writer) {
 	fmt.Fprintf(w, "boolean_false:\n")
 	fmt.Fprintf(w, "\t.long tag_of_Boolean\n")
 	fmt.Fprintf(w, "\t.long size_of_Boolean\n")
-	fmt.Fprintf(w, "\t.long 0\n")
+	fmt.Fprintf(w, "\t.long gc_tag_root\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".globl boolean_true\n")
 	fmt.Fprintf(w, ".align 2\n")
 	fmt.Fprintf(w, "boolean_true:\n")
 	fmt.Fprintf(w, "\t.long tag_of_Boolean\n")
 	fmt.Fprintf(w, "\t.long size_of_Boolean\n")
-	fmt.Fprintf(w, "\t.long 0\n")
+	fmt.Fprintf(w, "\t.long gc_tag_root\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".globl unit_lit\n")
 	fmt.Fprintf(w, ".align 2\n")
 	fmt.Fprintf(w, "unit_lit:\n")
 	fmt.Fprintf(w, "\t.long tag_of_Unit\n")
 	fmt.Fprintf(w, "\t.long size_of_Unit\n")
-	fmt.Fprintf(w, "\t.long 0\n")
+	fmt.Fprintf(w, "\t.long gc_tag_root\n")
 	fmt.Fprintf(w, "\n")
 	for i, x := range ints {
 		fmt.Fprintf(w, ".align 2\n")
 		fmt.Fprintf(w, "int_lit_%d:\n", i)
 		fmt.Fprintf(w, "\t.long tag_of_Int\n")
 		fmt.Fprintf(w, "\t.long size_of_Int + 4\n")
-		fmt.Fprintf(w, "\t.long 0\n")
+		fmt.Fprintf(w, "\t.long gc_tag_root\n")
 		fmt.Fprintf(w, "\t.long %d\n", x)
 		fmt.Fprintf(w, "\n")
 	}
@@ -76,7 +76,7 @@ func (p *Program) CodeGen(w io.Writer) {
 		fmt.Fprintf(w, "string_lit_%d:\n", i)
 		fmt.Fprintf(w, "\t.long tag_of_String\n")
 		fmt.Fprintf(w, "\t.long size_of_String + %d\n", len(x))
-		fmt.Fprintf(w, "\t.long 0\n")
+		fmt.Fprintf(w, "\t.long gc_tag_root\n")
 		fmt.Fprintf(w, "\t.long int_lit_%d\n", stringLengths[i])
 		for j := 0; j < len(x); j++ {
 			fmt.Fprintf(w, "\t.byte %d\n", x[j])
@@ -89,6 +89,19 @@ func (p *Program) CodeGen(w io.Writer) {
 	fmt.Fprintf(w, "byte_ints:\n")
 	for _, x := range byteIntIDs {
 		fmt.Fprintf(w, "\t.long int_lit_%d\n", x)
+	}
+	fmt.Fprintf(w, "\n")
+
+	fmt.Fprintf(w, ".globl max_tag\n")
+	fmt.Fprintf(w, ".set max_tag, %d\n", len(p.Ordered))
+	fmt.Fprintf(w, "\t")
+
+	fmt.Fprintf(w, ".globl gc_sizes\n")
+	fmt.Fprintf(w, ".align 2\n")
+	fmt.Fprintf(w, "gc_sizes:\n")
+	fmt.Fprintf(w, "\t.long 0\n")
+	for _, c := range p.Ordered {
+		fmt.Fprintf(w, "\t.long size_of_%s / 4\n", c.Type.Name)
 	}
 	fmt.Fprintf(w, "\n")
 
@@ -125,7 +138,7 @@ func (p *Program) CodeGen(w io.Writer) {
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".text\n")
 
-	genMethod(w, "main", 0, p.Main)
+	genMethod(w, "main", 0, p.Main, false)
 
 	for _, c := range p.Ordered {
 		c.genCode(w)
@@ -165,7 +178,7 @@ func (c *Class) genConstants(w io.Writer) {
 	fmt.Fprintf(w, ".set size_of_%s, %d\n", c.Type.Name, c.Size)
 }
 
-func genMethod(w io.Writer, name string, args int, body Expr) {
+func genMethod(w io.Writer, name string, args int, body Expr, hasArgs bool) {
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, ".globl %s\n", name)
 	fmt.Fprintf(w, "%s:\n", name)
@@ -173,10 +186,11 @@ func genMethod(w io.Writer, name string, args int, body Expr) {
 	fmt.Fprintf(w, "\tenter $%d, $0\n", vars*4)
 	varsUsed := 0
 	label := 0
-	body.genCode(w, func() string {
+	mkLabel := func() string {
 		label++
 		return fmt.Sprintf("%d", label)
-	}, func() (int, func()) {
+	}
+	body.genCode(w, mkLabel, func() (int, func()) {
 		if vars == varsUsed {
 			panic("INTERNAL ERROR: too many vars")
 		}
@@ -189,8 +203,36 @@ func genMethod(w io.Writer, name string, args int, body Expr) {
 			varsUsed--
 		}
 	})
+	if hasArgs {
+		for i := 0; i <= args; i++ {
+			fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", i*4+8)
+			genGC(w, "%ebx", mkLabel)
+		}
+	}
 	fmt.Fprintf(w, "\tleave\n")
 	fmt.Fprintf(w, "\tret $%d\n", args*4+4)
+}
+
+func genRef(w io.Writer, reg string, label func() string) {
+	label_done := label()
+
+	fmt.Fprintf(w, "\ttest %s, %s\n", reg, reg)
+	fmt.Fprintf(w, "\tjz %sf\n", label_done)
+	fmt.Fprintf(w, "\tcmpl $0, gc_offset(%s)\n", reg)
+	fmt.Fprintf(w, "\tjl %sf\n", label_done)
+	fmt.Fprintf(w, "\tincl gc_offset(%s)\n", reg)
+	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func genGC(w io.Writer, reg string, label func() string) {
+	label_done := label()
+
+	fmt.Fprintf(w, "\ttest %s, %s\n", reg, reg)
+	fmt.Fprintf(w, "\tjz %sf\n", label_done)
+	fmt.Fprintf(w, "\tcmpl $0, gc_offset(%s)\n", reg)
+	fmt.Fprintf(w, "\tjle %sf\n", label_done)
+	fmt.Fprintf(w, "\tdecl gc_offset(%s)\n", reg)
+	fmt.Fprintf(w, "%s:\n", label_done)
 }
 
 func (c *Class) genCode(w io.Writer) {
@@ -203,7 +245,7 @@ func (c *Class) genCode(w io.Writer) {
 			for i, a := range m.Args {
 				a.Offset = (len(m.Args)-i)*4 + 4
 			}
-			genMethod(w, c.Type.Name+"."+m.Name.Name, len(m.Args), m.Body)
+			genMethod(w, c.Type.Name+"."+m.Name.Name, len(m.Args), m.Body, true)
 		}
 	}
 }
@@ -248,6 +290,7 @@ func (e *NegativeExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%ebx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tnegl %%ebx\n")
 	fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
@@ -309,6 +352,7 @@ func (e *WhileExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
 	fmt.Fprintf(w, "\tje %sf\n", label_done)
 	e.Body.genCode(w, label, slot)
+	genGC(w, "%eax", label)
 	fmt.Fprintf(w, "\tjmp %sb\n", label_cond)
 	fmt.Fprintf(w, "%s:\n", label_done)
 	fmt.Fprintf(w, "\tlea unit_lit, %%eax\n")
@@ -335,6 +379,8 @@ func (e *LessOrEqualExpr) genCode(w io.Writer, label func() string, slot func() 
 	fmt.Fprintf(w, "\tpush %%eax\n")
 	e.Right.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%eax", label)
+	genGC(w, "%ebx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
@@ -367,6 +413,8 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tpush %%eax\n")
 	e.Right.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%eax", label)
+	genGC(w, "%ebx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
@@ -401,6 +449,8 @@ func (e *MultiplyExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
 	fmt.Fprintf(w, "\tpop %%ecx\n")
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%ebx", label)
+	genGC(w, "%ecx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
 	fmt.Fprintf(w, "\timul %%ebx, %%ecx\n")
@@ -426,6 +476,8 @@ func (e *DivideExpr) genCode(w io.Writer, label func() string, slot func() (int,
 	e.Right.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tmovl %%eax, %%ebx\n")
 	fmt.Fprintf(w, "\tpop %%eax\n")
+	genGC(w, "%eax", label)
+	genGC(w, "%ebx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tcdq\n")
@@ -461,6 +513,8 @@ func (e *AddExpr) genCode(w io.Writer, label func() string, slot func() (int, fu
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
 	fmt.Fprintf(w, "\tpop %%ecx\n")
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%ebx", label)
+	genGC(w, "%ecx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
 	fmt.Fprintf(w, "\taddl %%ebx, %%ecx\n")
@@ -490,6 +544,8 @@ func (e *SubtractExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
 	fmt.Fprintf(w, "\tpop %%ecx\n")
 	fmt.Fprintf(w, "\tpop %%ebx\n")
+	genGC(w, "%ebx", label)
+	genGC(w, "%ecx", label)
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
 	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
 	fmt.Fprintf(w, "\tsubl %%ecx, %%ebx\n")
@@ -546,6 +602,8 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	}
 
 	fmt.Fprintf(w, "%s:\n", label_done)
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	genGC(w, "%ebx", label)
 	unreserve()
 }
 
@@ -602,6 +660,7 @@ func (e *SuperCallExpr) genCountVars(this int) int {
 
 func (e *SuperCallExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%eax\n", e.This)
+	genRef(w, "%eax", label)
 	fmt.Fprintf(w, "\tpush %%eax\n")
 	for _, a := range e.Args {
 		a.genCode(w, label, slot)
@@ -686,7 +745,14 @@ func (e *AssignExpr) genCountVars(this int) int {
 func (e *AssignExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	e.Expr.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
+	if e.Name.Object.Stack() {
+		fmt.Fprintf(w, "\tmovl %s(%%edx), %%ebx\n", e.Name.Object.Offs())
+		genGC(w, "%ebx", label)
+	}
 	fmt.Fprintf(w, "\tmovl %%eax, %s(%%edx)\n", e.Name.Object.Offs())
+	if !e.Name.Object.Stack() {
+		genGC(w, "%eax", label)
+	}
 	fmt.Fprintf(w, "\tleal unit_lit, %%eax\n")
 }
 
@@ -709,6 +775,8 @@ func (e *VarExpr) genCode(w io.Writer, label func() string, slot func() (int, fu
 	e.Offset = offset
 	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
 	e.Body.genCode(w, label, slot)
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	genGC(w, "%ebx", label)
 	unreserve()
 }
 
@@ -727,6 +795,7 @@ func (e *ChainExpr) genCountVars(this int) int {
 
 func (e *ChainExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	e.Pre.genCode(w, label, slot)
+	genGC(w, "%eax", label)
 	e.Expr.genCode(w, label, slot)
 }
 
@@ -740,6 +809,7 @@ func (e *ThisExpr) genCountVars(this int) int {
 
 func (e *ThisExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%eax\n", e.Offset)
+	genRef(w, "%eax", label)
 }
 
 func (e *NullExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -775,6 +845,7 @@ func (e *NameExpr) genCountVars(this int) int {
 func (e *NameExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
 	fmt.Fprintf(w, "\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
+	genRef(w, "%eax", label)
 }
 
 func (e *StringExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {

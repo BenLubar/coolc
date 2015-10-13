@@ -4,10 +4,10 @@ all: libcool.a
 %: libcool.a %.o
 	ld -melf_i386 -o $@ --start-group $^
 
-libcool.a: basic.o basic_linux.o
+libcool.a: basic.o runtime_linux.o gc.o
 	ar rcs $@ $^
 
-%.o: %.s
+%.o: %.s basic_defs.s
 	as -32 -g --fatal-warnings -o $@ $<
 
 %.s: %.cool ../coolc

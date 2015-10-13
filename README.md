@@ -1,6 +1,8 @@
 (Yet another) Cool compiler
 ===========================
 
+[![Build Status](https://drone.io/github.com/BenLubar/coolc/status.png)](https://drone.io/github.com/BenLubar/coolc/latest)
+
 **Note:** This is not [the `coolc` that outputs BIT](https://github.com/BenLubar/bit/tree/master/cmd/coolc). This `coolc` outputs 32-bit x86 assembly with AT&T (GNU as) syntax.
 
 Calling convention

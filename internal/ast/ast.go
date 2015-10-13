@@ -52,6 +52,10 @@ func (a *Formal) Offs() string {
 	return fmt.Sprintf("%d", a.Offset)
 }
 
+func (a *Formal) Stack() bool {
+	return true
+}
+
 type Feature interface {
 	semantTypes(func(*Ident), *Class)
 }
@@ -74,6 +78,10 @@ func (a *Attribute) Base(this int) string {
 
 func (a *Attribute) Offs() string {
 	return fmt.Sprintf("offset_of_%s.%s", a.Parent.Type.Name, a.Name.Name)
+}
+
+func (a *Attribute) Stack() bool {
+	return false
 }
 
 type Method struct {
@@ -159,6 +167,10 @@ func (e *MatchExpr) Offs() string {
 	return fmt.Sprintf("%d", e.Offset)
 }
 
+func (e *MatchExpr) Stack() bool {
+	return true
+}
+
 type DynamicCallExpr struct {
 	Recv Expr
 	Name *Ident
@@ -209,6 +221,10 @@ func (e *VarExpr) Base(this int) string {
 
 func (e *VarExpr) Offs() string {
 	return fmt.Sprintf("%d", e.Offset)
+}
+
+func (e *VarExpr) Stack() bool {
+	return true
 }
 
 type ChainExpr struct {
@@ -267,6 +283,7 @@ type Case struct {
 type Object interface {
 	Base(int) string
 	Offs() string
+	Stack() bool
 }
 
 type Ident struct {

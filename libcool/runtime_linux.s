@@ -45,7 +45,6 @@ runtime.input:
 
 1:
 	movl runtime_input_remaining, %ecx
-	cmpl $runtime_input_max, %ecx
 
 	leal runtime_input_buf, %edi
 	movl $10, %eax
@@ -93,6 +92,7 @@ runtime.input:
 	cmpl $0, %ecx
 	jne 3b
 
+	decl gc_offset(%eax)
 	movl $0, %eax
 
 	leave

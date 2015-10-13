@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -11,13 +12,15 @@ import (
 )
 
 func init() {
-	if err := exec.Command("go", "build").Run(); err != nil {
+	if output, err := exec.Command("go", "build").CombinedOutput(); err != nil {
+		fmt.Println(string(output))
 		panic(err)
 	}
 
 	mk := exec.Command("make", "libcool.a")
 	mk.Dir = "libcool"
-	if err := mk.Run(); err != nil {
+	if output, err := mk.CombinedOutput(); err != nil {
+		fmt.Println(string(output))
 		panic(err)
 	}
 }
