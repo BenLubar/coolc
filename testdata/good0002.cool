@@ -1,0 +1,12 @@
+class Main() extends IO() {
+	{
+		out("2 + 3 = ").out_any(2 + 3).out("\n");
+		out("2 - 3 = ").out_any(2 - 3).out("\n");
+		out("2 * 3 = ").out_any(2 * 3).out("\n");
+		out("2 / 3 = ").out_any(2 / 3).out("\n");
+		out("3 + 2 = ").out_any(3 + 2).out("\n");
+		out("3 - 2 = ").out_any(3 - 2).out("\n");
+		out("3 * 2 = ").out_any(3 * 2).out("\n");
+		out("3 / 2 = ").out_any(3 / 2).out("\n")
+	};
+}

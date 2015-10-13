@@ -426,6 +426,41 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "%s:\n", label_done)
 }
 
+func genArithmetic(w io.Writer, label func() string, slot func() (int, func()), left, right Expr, compute func(), box bool) {
+	leftRaw, leftUnboxed := left.(ArithmeticExpr)
+	if leftUnboxed {
+		leftRaw.genCodeRawInt(w, label, slot)
+	} else {
+		left.genCode(w, label, slot)
+	}
+	fmt.Fprintf(w, "\tpush %%eax\n")
+	rightRaw, rightUnboxed := right.(ArithmeticExpr)
+	if rightUnboxed {
+		rightRaw.genCodeRawInt(w, label, slot)
+	} else {
+		right.genCode(w, label, slot)
+	}
+	fmt.Fprintf(w, "\tmovl %%eax, %%ecx\n")
+	fmt.Fprintf(w, "\tpop %%ebx\n")
+	if !leftUnboxed {
+		genGC(w, "%ebx", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
+	}
+	if !rightUnboxed {
+		genGC(w, "%ecx", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
+	}
+	compute()
+	if box {
+		fmt.Fprintf(w, "\tpush %%eax\n")
+		fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
+		fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
+		fmt.Fprintf(w, "\tcall gc_alloc\n")
+		fmt.Fprintf(w, "\tpop %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %%ecx, offset_of_Int.value(%%eax)\n")
+	}
+}
+
 func (e *MultiplyExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
 	e.Left.genCollectLiterals(ints, strings)
 	e.Right.genCollectLiterals(ints, strings)
@@ -440,21 +475,17 @@ func (e *MultiplyExpr) genCountVars(this int) int {
 }
 
 func (e *MultiplyExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
-	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
-	fmt.Fprintf(w, "\tcall gc_alloc\n")
-	fmt.Fprintf(w, "\tpop %%ecx\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%ebx", label)
-	genGC(w, "%ecx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
-	fmt.Fprintf(w, "\timul %%ebx, %%ecx\n")
-	fmt.Fprintf(w, "\tmovl %%ecx, offset_of_Int.value(%%eax)\n")
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\timul %%ebx, %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %%ecx, %%eax\n")
+	}, true)
+}
+
+func (e *MultiplyExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\timul %%ebx, %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %%ecx, %%eax\n")
+	}, false)
 }
 
 func (e *DivideExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -471,23 +502,19 @@ func (e *DivideExpr) genCountVars(this int) int {
 }
 
 func (e *DivideExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tmovl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tpop %%eax\n")
-	genGC(w, "%eax", label)
-	genGC(w, "%ebx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
-	fmt.Fprintf(w, "\tcdq\n")
-	fmt.Fprintf(w, "\tidiv %%ebx\n")
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
-	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
-	fmt.Fprintf(w, "\tcall gc_alloc\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\tmovl %%ebx, %%eax\n")
+		fmt.Fprintf(w, "\tcdq\n")
+		fmt.Fprintf(w, "\tidiv %%ecx\n")
+	}, true)
+}
+
+func (e *DivideExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\tmovl %%ebx, %%eax\n")
+		fmt.Fprintf(w, "\tcdq\n")
+		fmt.Fprintf(w, "\tidiv %%ecx\n")
+	}, false)
 }
 
 func (e *AddExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -504,21 +531,17 @@ func (e *AddExpr) genCountVars(this int) int {
 }
 
 func (e *AddExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
-	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
-	fmt.Fprintf(w, "\tcall gc_alloc\n")
-	fmt.Fprintf(w, "\tpop %%ecx\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%ebx", label)
-	genGC(w, "%ecx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
-	fmt.Fprintf(w, "\taddl %%ebx, %%ecx\n")
-	fmt.Fprintf(w, "\tmovl %%ecx, offset_of_Int.value(%%eax)\n")
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\taddl %%ebx, %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %%ecx, %%eax\n")
+	}, true)
+}
+
+func (e *AddExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\taddl %%ebx, %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %%ecx, %%eax\n")
+	}, false)
 }
 
 func (e *SubtractExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -535,21 +558,17 @@ func (e *SubtractExpr) genCountVars(this int) int {
 }
 
 func (e *SubtractExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
-	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
-	fmt.Fprintf(w, "\tcall gc_alloc\n")
-	fmt.Fprintf(w, "\tpop %%ecx\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%ebx", label)
-	genGC(w, "%ecx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
-	fmt.Fprintf(w, "\tsubl %%ecx, %%ebx\n")
-	fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\tsubl %%ecx, %%ebx\n")
+		fmt.Fprintf(w, "\tmovl %%ebx, %%eax\n")
+	}, true)
+}
+
+func (e *SubtractExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	genArithmetic(w, label, slot, e.Left, e.Right, func() {
+		fmt.Fprintf(w, "\tsubl %%ecx, %%ebx\n")
+		fmt.Fprintf(w, "\tmovl %%ebx, %%eax\n")
+	}, false)
 }
 
 func (e *MatchExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -892,6 +911,10 @@ func (e *IntExpr) genCountVars(this int) int {
 
 func (e *IntExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	fmt.Fprintf(w, "\tleal int_lit_%d, %%eax\n", e.Lit.LitID)
+}
+
+func (e *IntExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	fmt.Fprintf(w, "\tmovl $%d, %%eax\n", e.Lit.Int)
 }
 
 func (e *NativeExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
