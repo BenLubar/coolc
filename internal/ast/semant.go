@@ -1024,11 +1024,12 @@ func (a *Case) semantIdentifiers(report func(token.Pos, string), less func(*Clas
 	left := a.Type.Class
 	any := false
 
-	check := func(i int) {
-		if possible[i] {
-			possible[i] = false
-			a.Tags = append(a.Tags, i)
-			any = true
+	check := func(min, max int) {
+		for i := min; i <= max; i++ {
+			if possible[i] {
+				possible[i] = false
+				any = true
+			}
 		}
 	}
 
@@ -1036,12 +1037,10 @@ func (a *Case) semantIdentifiers(report func(token.Pos, string), less func(*Clas
 		// there are no values of type Nothing
 	} else if left == nullClass {
 		// check if Null is possible
-		check(0)
+		check(0, 0)
 	} else {
 		// left and all of left's children
-		for i := left.Order; i <= left.MaxOrder; i++ {
-			check(i)
-		}
+		check(left.Order, left.MaxOrder)
 	}
 
 	if !any {

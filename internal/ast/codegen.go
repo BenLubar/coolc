@@ -588,9 +588,16 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	}
 
 	for i, c := range e.Cases {
-		for _, t := range c.Tags {
-			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", t)
+		if c.Type.Class.Order == c.Type.Class.MaxOrder {
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
 			fmt.Fprintf(w, "\tje %sf\n", labels[i])
+		} else {
+			label_skip := label()
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
+			fmt.Fprintf(w, "\tjl %sf\n", label_skip)
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.MaxOrder)
+			fmt.Fprintf(w, "\tjle %sf\n", labels[i])
+			fmt.Fprintf(w, "%s:\n", label_skip)
 		}
 	}
 	fmt.Fprintf(w, "\tjmp runtime.case_panic\n")

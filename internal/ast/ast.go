@@ -276,8 +276,6 @@ type Case struct {
 	Name *Ident
 	Type *Ident
 	Body Expr
-
-	Tags []int
 }
 
 type Object interface {
