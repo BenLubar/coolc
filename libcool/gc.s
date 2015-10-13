@@ -150,22 +150,6 @@ gc_alloc:
 	jmp 1b
 
 gc_collect:
-	movl gc_heap_start, %eax
-
-1:
-	// clear GC flags: live->none
-	cmpl $0, tag_offset(%eax)
-	je 3f
-	cmpl $gc_tag_live, gc_offset(%eax)
-	jne 2f
-	movl $gc_tag_none, gc_offset(%eax)
-
-2:
-	addl size_offset(%eax), %eax
-	leal data_offset(%eax), %eax
-	jmp 1b
-
-3:
 	// while we're finding new references:
 	movl $0, %ebx
 	movl gc_heap_start, %eax
@@ -216,7 +200,7 @@ gc_collect:
 
 6:
 	test %ebx, %ebx
-	jnz 3b
+	jnz gc_collect
 
 	// now we have:
 	// gc_tag_garbage, gc_tag_root -> unchanged, don't touch
@@ -241,6 +225,22 @@ gc_collect:
 	jmp 11b
 
 13:
+	movl gc_heap_start, %eax
+
+1:
+	// clear GC flags: live->none
+	cmpl $0, tag_offset(%eax)
+	je 3f
+	cmpl $gc_tag_live, gc_offset(%eax)
+	jne 2f
+	movl $gc_tag_none, gc_offset(%eax)
+
+2:
+	addl size_offset(%eax), %eax
+	leal data_offset(%eax), %eax
+	jmp 1b
+
+3:
 	// if we freed anything, go back to the beginning.
 	test %ebx, %ebx
 	jnz gc_collect
