@@ -279,21 +279,46 @@ func (e *NegativeExpr) genCollectLiterals(ints func(int32) int, strings func(str
 }
 
 func (e *NegativeExpr) genCountVars(this int) int {
-	return e.Expr.genCountVars(this)
+	vars := e.Expr.genCountVars(this)
+	if v := 1; vars < v {
+		vars = v
+	}
+	return vars
 }
 
 func (e *NegativeExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Expr.genCode(w, label, slot)
-
-	fmt.Fprintf(w, "\tpush %%eax\n")
+	offset, unreserve := slot()
 	fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
 	fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
 	fmt.Fprintf(w, "\tcall gc_alloc\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%ebx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+
+	if raw, ok := e.Expr.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+		fmt.Fprintf(w, "\tmovl %%eax, %%ebx\n")
+	} else {
+		e.Expr.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%ebx\n")
+	}
+
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%eax\n", offset)
+	unreserve()
+
 	fmt.Fprintf(w, "\tnegl %%ebx\n")
 	fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
+}
+
+func (e *NegativeExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	if raw, ok := e.Expr.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Expr.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+
+	fmt.Fprintf(w, "\tnegl %%eax\n")
 }
 
 func (e *IfExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -365,7 +390,7 @@ func (e *LessOrEqualExpr) genCollectLiterals(ints func(int32) int, strings func(
 
 func (e *LessOrEqualExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -375,14 +400,24 @@ func (e *LessOrEqualExpr) genCode(w io.Writer, label func() string, slot func() 
 	label_true := label()
 	label_done := label()
 
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%eax", label)
-	genGC(w, "%ebx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
+	if raw, ok := e.Left.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Left.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	offset, unreserve := slot()
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+	if raw, ok := e.Right.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Right.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	unreserve()
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
 	fmt.Fprintf(w, "\tjle %sf\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
@@ -399,7 +434,7 @@ func (e *LessThanExpr) genCollectLiterals(ints func(int32) int, strings func(str
 
 func (e *LessThanExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -409,14 +444,24 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 	label_true := label()
 	label_done := label()
 
-	e.Left.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	e.Right.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	genGC(w, "%eax", label)
-	genGC(w, "%ebx", label)
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
+	if raw, ok := e.Left.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Left.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	offset, unreserve := slot()
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+	if raw, ok := e.Right.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Right.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	unreserve()
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
 	fmt.Fprintf(w, "\tjl %sf\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
@@ -427,38 +472,34 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 }
 
 func genArithmetic(w io.Writer, label func() string, slot func() (int, func()), left, right Expr, compute func(), box bool) {
-	leftRaw, leftUnboxed := left.(ArithmeticExpr)
-	if leftUnboxed {
-		leftRaw.genCodeRawInt(w, label, slot)
+	if raw, ok := left.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
 	} else {
 		left.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	}
-	fmt.Fprintf(w, "\tpush %%eax\n")
-	rightRaw, rightUnboxed := right.(ArithmeticExpr)
-	if rightUnboxed {
-		rightRaw.genCodeRawInt(w, label, slot)
+	offset, unreserve := slot()
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+	if raw, ok := right.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
 	} else {
 		right.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	}
 	fmt.Fprintf(w, "\tmovl %%eax, %%ecx\n")
-	fmt.Fprintf(w, "\tpop %%ebx\n")
-	if !leftUnboxed {
-		genGC(w, "%ebx", label)
-		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ebx), %%ebx\n")
-	}
-	if !rightUnboxed {
-		genGC(w, "%ecx", label)
-		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%ecx), %%ecx\n")
-	}
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
 	compute()
 	if box {
-		fmt.Fprintf(w, "\tpush %%eax\n")
+		fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
 		fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
 		fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
 		fmt.Fprintf(w, "\tcall gc_alloc\n")
-		fmt.Fprintf(w, "\tpop %%ecx\n")
+		fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ecx\n", offset)
 		fmt.Fprintf(w, "\tmovl %%ecx, offset_of_Int.value(%%eax)\n")
 	}
+	unreserve()
 }
 
 func (e *MultiplyExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -468,7 +509,7 @@ func (e *MultiplyExpr) genCollectLiterals(ints func(int32) int, strings func(str
 
 func (e *MultiplyExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -495,7 +536,7 @@ func (e *DivideExpr) genCollectLiterals(ints func(int32) int, strings func(strin
 
 func (e *DivideExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -524,7 +565,7 @@ func (e *AddExpr) genCollectLiterals(ints func(int32) int, strings func(string) 
 
 func (e *AddExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -551,7 +592,7 @@ func (e *SubtractExpr) genCollectLiterals(ints func(int32) int, strings func(str
 
 func (e *SubtractExpr) genCountVars(this int) int {
 	vars := e.Left.genCountVars(this)
-	if v := e.Right.genCountVars(this); v > vars {
+	if v := 1 + e.Right.genCountVars(this); v > vars {
 		vars = v
 	}
 	return vars
@@ -930,16 +971,16 @@ func (e *NameExpr) genCountVars(this int) int {
 }
 
 func (e *NameExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
-	fmt.Fprintf(w, "\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
 	if e.Name.Object.RawInt() {
-		fmt.Fprintf(w, "\tpush %%eax\n")
 		fmt.Fprintf(w, "\tmovl $(size_of_Int + 4), %%eax\n")
 		fmt.Fprintf(w, "\tmovl $tag_of_Int, %%ebx\n")
 		fmt.Fprintf(w, "\tcall gc_alloc\n")
-		fmt.Fprintf(w, "\tpop %%ebx\n")
+		fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
+		fmt.Fprintf(w, "\tmovl %s(%%edx), %%ebx\n", e.Name.Object.Offs())
 		fmt.Fprintf(w, "\tmovl %%ebx, offset_of_Int.value(%%eax)\n")
 	} else {
+		fmt.Fprintf(w, "\tmovl %s, %%edx\n", e.Name.Object.Base(e.This))
+		fmt.Fprintf(w, "\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
 		genRef(w, "%eax", label)
 	}
 }
