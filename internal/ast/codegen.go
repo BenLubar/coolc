@@ -110,6 +110,10 @@ func (p *Program) CodeGen(w io.Writer) {
 		fmt.Fprintf(w, "methods_of_%s:\n", c.Type.Name)
 		for _, m := range c.Methods {
 			fmt.Fprintf(w, "\t.long %s.%s\n", m.Parent.Type.Name, m.Name.Name)
+			if m.Parent == c {
+				fmt.Fprintf(w, "\t.globl method_offset_%s.%s\n", c.Type.Name, m.Name.Name)
+				fmt.Fprintf(w, "\t.set method_offset_%s.%s, %d\n", c.Type.Name, m.Name.Name, m.Order*4)
+			}
 		}
 		fmt.Fprintf(w, "\n")
 	}
@@ -900,7 +904,7 @@ func (e *DynamicCallExpr) genCode(w io.Writer, label func() string, slot func() 
 	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
 	fmt.Fprintf(w, "\tshll $2, %%eax\n")
 	fmt.Fprintf(w, "\tmovl method_tables(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tmovl %d(%%eax), %%eax\n", e.Name.Method.Order*4)
+	fmt.Fprintf(w, "\tmovl method_offset_%s.%s(%%eax), %%eax\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
 	fmt.Fprintf(w, "\tcall *%%eax\n")
 }
 
