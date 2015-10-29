@@ -45,6 +45,8 @@ runtime.input:
 
 1:
 	movl runtime_input_remaining, %ecx
+	test %ecx, %ecx
+	jz 2f
 
 	leal runtime_input_buf, %edi
 	movl $10, %eax
@@ -92,6 +94,7 @@ runtime.input:
 	cmpl $0, %ecx
 	jne 3b
 
+	movl 8(%ebp), %eax
 	decl gc_offset(%eax)
 	movl $0, %eax
 
