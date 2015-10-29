@@ -119,6 +119,12 @@ type ArithmeticExpr interface {
 	genCodeRawInt(io.Writer, func() string, func() (int, func()))
 }
 
+type JumpExpr interface {
+	Expr
+
+	genCodeJump(io.Writer, string, string, func() string, func() (int, func()))
+}
+
 type NotExpr struct {
 	Expr Expr
 

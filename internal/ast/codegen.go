@@ -259,19 +259,29 @@ func (e *NotExpr) genCountVars(this int) int {
 }
 
 func (e *NotExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Expr.genCode(w, label, slot)
-
+	label_true := label()
 	label_false := label()
 	label_done := label()
 
-	fmt.Fprintf(w, "\tlea boolean_true, %%ebx\n")
-	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %sf\n", label_false)
+	e.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+
+	fmt.Fprintf(w, "%s:\n", label_true)
 	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
 	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_false)
 	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
 	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func (e *NotExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
+	if raw, ok := e.Expr.(JumpExpr); ok {
+		raw.genCodeJump(w, l1, l0, label, slot)
+	} else {
+		e.Expr.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %s\n", l1)
+		fmt.Fprintf(w, "\tjmp %s\n", l0)
+	}
 }
 
 func (e *NegativeExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -339,19 +349,89 @@ func (e *IfExpr) genCountVars(this int) int {
 }
 
 func (e *IfExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
-	e.Cond.genCode(w, label, slot)
-
+	label_true := label()
 	label_false := label()
 	label_done := label()
 
-	fmt.Fprintf(w, "\tlea boolean_false, %%ebx\n")
-	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %sf\n", label_false)
+	if raw, ok := e.Cond.(JumpExpr); ok {
+		raw.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	} else {
+		e.Cond.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %sf\n", label_false)
+	}
+
+	fmt.Fprintf(w, "%s:\n", label_true)
 	e.Then.genCode(w, label, slot)
 	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
 	fmt.Fprintf(w, "%s:\n", label_false)
 	e.Else.genCode(w, label, slot)
 	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func (e *IfExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	label_true := label()
+	label_false := label()
+	label_done := label()
+
+	if raw, ok := e.Cond.(JumpExpr); ok {
+		raw.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	} else {
+		e.Cond.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %sf\n", label_false)
+	}
+
+	fmt.Fprintf(w, "%s:\n", label_true)
+	if raw, ok := e.Then.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Then.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
+	fmt.Fprintf(w, "%s:\n", label_false)
+	if raw, ok := e.Else.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		e.Else.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func (e *IfExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
+	label_true := label()
+	label_false := label()
+
+	if raw, ok := e.Cond.(JumpExpr); ok {
+		raw.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	} else {
+		e.Cond.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %sf\n", label_false)
+	}
+
+	fmt.Fprintf(w, "%s:\n", label_true)
+	if raw, ok := e.Then.(JumpExpr); ok {
+		raw.genCodeJump(w, l0, l1, label, slot)
+	} else {
+		e.Then.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %s\n", l0)
+		fmt.Fprintf(w, "\tjmp %s\n", l1)
+	}
+	fmt.Fprintf(w, "%s:\n", label_false)
+	if raw, ok := e.Else.(JumpExpr); ok {
+		raw.genCodeJump(w, l0, l1, label, slot)
+	} else {
+		e.Else.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %s\n", l0)
+		fmt.Fprintf(w, "\tjmp %s\n", l1)
+	}
 }
 
 func (e *WhileExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -369,13 +449,18 @@ func (e *WhileExpr) genCountVars(this int) int {
 
 func (e *WhileExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	label_cond := label()
+	label_body := label()
 	label_done := label()
 
 	fmt.Fprintf(w, "%s:\n", label_cond)
-	e.Cond.genCode(w, label, slot)
-	fmt.Fprintf(w, "\tlea boolean_false, %%ebx\n")
-	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tje %sf\n", label_done)
+	if raw, ok := e.Cond.(JumpExpr); ok {
+		raw.genCodeJump(w, label_done+"f", label_body+"f", label, slot)
+	} else {
+		e.Cond.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %sf\n", label_done)
+	}
+	fmt.Fprintf(w, "%s:\n", label_body)
 	e.Body.genCode(w, label, slot)
 	genGC(w, "%eax", label)
 	fmt.Fprintf(w, "\tjmp %sb\n", label_cond)
@@ -398,8 +483,19 @@ func (e *LessOrEqualExpr) genCountVars(this int) int {
 
 func (e *LessOrEqualExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	label_true := label()
+	label_false := label()
 	label_done := label()
 
+	e.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	fmt.Fprintf(w, "%s:\n", label_false)
+	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
+	fmt.Fprintf(w, "%s:\n", label_true)
+	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
+	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func (e *LessOrEqualExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
 	if raw, ok := e.Left.(ArithmeticExpr); ok {
 		raw.genCodeRawInt(w, label, slot)
 	} else {
@@ -419,12 +515,8 @@ func (e *LessOrEqualExpr) genCode(w io.Writer, label func() string, slot func() 
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
 	unreserve()
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tjle %sf\n", label_true)
-	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
-	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
-	fmt.Fprintf(w, "%s:\n", label_true)
-	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
-	fmt.Fprintf(w, "%s:\n", label_done)
+	fmt.Fprintf(w, "\tjle %s\n", l1)
+	fmt.Fprintf(w, "\tjmp %s\n", l0)
 }
 
 func (e *LessThanExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
@@ -442,8 +534,19 @@ func (e *LessThanExpr) genCountVars(this int) int {
 
 func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	label_true := label()
+	label_false := label()
 	label_done := label()
 
+	e.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	fmt.Fprintf(w, "%s:\n", label_false)
+	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
+	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
+	fmt.Fprintf(w, "%s:\n", label_true)
+	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
+	fmt.Fprintf(w, "%s:\n", label_done)
+}
+
+func (e *LessThanExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
 	if raw, ok := e.Left.(ArithmeticExpr); ok {
 		raw.genCodeRawInt(w, label, slot)
 	} else {
@@ -463,12 +566,8 @@ func (e *LessThanExpr) genCode(w io.Writer, label func() string, slot func() (in
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
 	unreserve()
 	fmt.Fprintf(w, "\tcmpl %%eax, %%ebx\n")
-	fmt.Fprintf(w, "\tjl %sf\n", label_true)
-	fmt.Fprintf(w, "\tlea boolean_false, %%eax\n")
-	fmt.Fprintf(w, "\tjmp %sf\n", label_done)
-	fmt.Fprintf(w, "%s:\n", label_true)
-	fmt.Fprintf(w, "\tlea boolean_true, %%eax\n")
-	fmt.Fprintf(w, "%s:\n", label_done)
+	fmt.Fprintf(w, "\tjl %s\n", l1)
+	fmt.Fprintf(w, "\tjmp %s\n", l0)
 }
 
 func genArithmetic(w io.Writer, label func() string, slot func() (int, func()), left, right Expr, compute func(), box bool) {
@@ -671,6 +770,103 @@ func (e *MatchExpr) genCode(w io.Writer, label func() string, slot func() (int, 
 	fmt.Fprintf(w, "%s:\n", label_done)
 	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
 	genGC(w, "%ebx", label)
+	unreserve()
+}
+
+func (e *MatchExpr) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	label_null := label()
+	label_done := label()
+
+	e.Left.genCode(w, label, slot)
+	offset, unreserve := slot()
+	e.Offset = offset
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+	fmt.Fprintf(w, "\ttest %%eax, %%eax\n")
+	fmt.Fprintf(w, "\tjz %sf\n", label_null)
+	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
+	fmt.Fprintf(w, "%s:\n", label_null)
+
+	labels := make([]string, len(e.Cases))
+	for i := range labels {
+		labels[i] = label()
+	}
+
+	for i, c := range e.Cases {
+		if c.Type.Class.Order == c.Type.Class.MaxOrder {
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
+			fmt.Fprintf(w, "\tje %sf\n", labels[i])
+		} else {
+			label_skip := label()
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
+			fmt.Fprintf(w, "\tjl %sf\n", label_skip)
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.MaxOrder)
+			fmt.Fprintf(w, "\tjle %sf\n", labels[i])
+			fmt.Fprintf(w, "%s:\n", label_skip)
+		}
+	}
+	fmt.Fprintf(w, "\tjmp runtime.case_panic\n")
+
+	for i, c := range e.Cases {
+		fmt.Fprintf(w, "%s:\n", labels[i])
+		c.genCodeRawInt(w, label, slot)
+		fmt.Fprintf(w, "\tjmp %sf\n", label_done)
+	}
+
+	fmt.Fprintf(w, "%s:\n", label_done)
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	genGC(w, "%ebx", label)
+	unreserve()
+}
+
+func (e *MatchExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
+	label_null := label()
+	label_true := label()
+	label_false := label()
+
+	e.Left.genCode(w, label, slot)
+	offset, unreserve := slot()
+	e.Offset = offset
+	fmt.Fprintf(w, "\tmovl %%eax, %d(%%ebp)\n", offset)
+	fmt.Fprintf(w, "\ttest %%eax, %%eax\n")
+	fmt.Fprintf(w, "\tjz %sf\n", label_null)
+	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
+	fmt.Fprintf(w, "%s:\n", label_null)
+
+	labels := make([]string, len(e.Cases))
+	for i := range labels {
+		labels[i] = label()
+	}
+
+	for i, c := range e.Cases {
+		if c.Type.Class.Order == c.Type.Class.MaxOrder {
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
+			fmt.Fprintf(w, "\tje %sf\n", labels[i])
+		} else {
+			label_skip := label()
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.Order)
+			fmt.Fprintf(w, "\tjl %sf\n", label_skip)
+			fmt.Fprintf(w, "\tcmpl $%d, %%eax\n", c.Type.Class.MaxOrder)
+			fmt.Fprintf(w, "\tjle %sf\n", labels[i])
+			fmt.Fprintf(w, "%s:\n", label_skip)
+		}
+	}
+	fmt.Fprintf(w, "\tjmp runtime.case_panic\n")
+
+	for i, c := range e.Cases {
+		fmt.Fprintf(w, "%s:\n", labels[i])
+		c.genCodeJump(w, label_false+"f", label_true+"f", label, slot)
+	}
+
+	fmt.Fprintf(w, "%s:\n", label_false)
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	genGC(w, "%ebx", label)
+	fmt.Fprintf(w, "\tjmp %s\n", l0)
+
+	fmt.Fprintf(w, "%s:\n", label_true)
+	fmt.Fprintf(w, "\tmovl %d(%%ebp), %%ebx\n", offset)
+	genGC(w, "%ebx", label)
+	fmt.Fprintf(w, "\tjmp %s\n", l1)
+
 	unreserve()
 }
 
@@ -1020,6 +1216,14 @@ func (e *BoolExpr) genCode(w io.Writer, label func() string, slot func() (int, f
 	}
 }
 
+func (e *BoolExpr) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
+	if e.Lit.Bool {
+		fmt.Fprintf(w, "\tjmp %s\n", l1)
+	} else {
+		fmt.Fprintf(w, "\tjmp %s\n", l0)
+	}
+}
+
 func (e *IntExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {
 	e.Lit.LitID = ints(e.Lit.Int)
 }
@@ -1057,4 +1261,25 @@ func (c *Case) genCountVars(this int) int {
 
 func (c *Case) genCode(w io.Writer, label func() string, slot func() (int, func())) {
 	c.Body.genCode(w, label, slot)
+}
+
+func (c *Case) genCodeRawInt(w io.Writer, label func() string, slot func() (int, func())) {
+	if raw, ok := c.Body.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(w, label, slot)
+	} else {
+		c.Body.genCode(w, label, slot)
+		genGC(w, "%eax", label)
+		fmt.Fprintf(w, "\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+}
+
+func (c *Case) genCodeJump(w io.Writer, l0, l1 string, label func() string, slot func() (int, func())) {
+	if raw, ok := c.Body.(JumpExpr); ok {
+		raw.genCodeJump(w, l0, l1, label, slot)
+	} else {
+		c.Body.genCode(w, label, slot)
+		fmt.Fprintf(w, "\tcmpl $boolean_false, %%eax\n")
+		fmt.Fprintf(w, "\tje %s\n", l0)
+		fmt.Fprintf(w, "\tjmp %s\n", l1)
+	}
 }
