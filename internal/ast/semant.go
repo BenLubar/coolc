@@ -480,6 +480,9 @@ func (c *Class) semantIdentifiers(report func(token.Pos, string), less func(*Cla
 		report(c.Extends.Type.Pos, s)
 	})
 	used := make(map[string]token.Pos)
+	for _, id := range ids {
+		used[id.Name.Name] = id.Name.Pos
+	}
 	for _, f := range c.Features {
 		if a, ok := f.(*Attribute); ok {
 			a.Name.Object = a
