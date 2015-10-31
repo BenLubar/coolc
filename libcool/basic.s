@@ -187,6 +187,8 @@ IO.symbol:
 	movl 8(%ebp), %ecx
 	movl $gc_tag_root, gc_offset(%ecx)
 	movl %ecx, offset_of_Symbol.name(%eax)
+	movl offset_of_String.length(%ecx), %ecx
+	movl $gc_tag_root, gc_offset(%ecx)
 	pop %ebx
 	movl %eax, (%ebx)
 
