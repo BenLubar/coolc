@@ -99,19 +99,19 @@ IO.out:
 
 .globl IO.in
 IO.in:
-	enter $0, $0
+	enter $4, $0
 
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
 	movl $(size_of_String + max_line_length), offset_of_Int.value(%eax)
-	push %eax
+	movl %eax, -4(%ebp)
 
 	movl $(size_of_String + max_line_length), %eax
 	movl $tag_of_String, %ebx
 	call gc_alloc
 
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %ebx, offset_of_String.length(%eax)
 	decl gc_offset(%ebx)
 
@@ -129,7 +129,7 @@ IO.in:
 
 .globl IO.symbol
 IO.symbol:
-	enter $0, $0
+	enter $12, $0
 
 	movl 12(%ebp), %eax
 	cmpl $0, gc_offset(%eax)
@@ -149,9 +149,9 @@ IO.symbol:
 	test %ecx, %ecx
 	jz 2f
 
-	push %ebx
-	push %ecx
-	push %edx
+	movl %ebx, -4(%ebp)
+	movl %ecx, -8(%ebp)
+	movl %edx, -12(%ebp)
 	movl 8(%ebp), %eax
 	push %eax
 	movl offset_of_Symbol.name(%ecx), %eax
@@ -160,9 +160,9 @@ IO.symbol:
 	lea boolean_true, %ebx
 	cmpl %ebx, %eax
 	je 3f
-	pop %edx
-	pop %ecx
-	pop %ebx
+	movl -4(%ebp), %ebx
+	movl -8(%ebp), %ecx
+	movl -12(%ebp), %edx
 
 	lea offset_of_Symbol.next(%ecx), %ebx
 	movl offset_of_Symbol.next(%ecx), %ecx
@@ -170,36 +170,35 @@ IO.symbol:
 	jmp 1b
 
 2:
-	push %ebx
-	push %edx
+	movl %ebx, -4(%ebp)
+	movl %edx, -8(%ebp)
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
-	pop %edx
+	movl -8(%ebp), %edx
 	movl %edx, offset_of_Int.value(%eax)
-	push %eax
+	movl %eax, -8(%ebp)
 	movl $size_of_Symbol, %eax
 	movl $tag_of_Symbol, %ebx
 	call gc_alloc
 	movl $gc_tag_root, gc_offset(%eax)
-	pop %edx
+	movl -8(%ebp), %edx
 	movl %edx, offset_of_Symbol.hash(%eax)
 	movl 8(%ebp), %ecx
 	movl $gc_tag_root, gc_offset(%ecx)
 	movl %ecx, offset_of_Symbol.name(%eax)
 	movl offset_of_String.length(%ecx), %ecx
 	movl $gc_tag_root, gc_offset(%ecx)
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %eax, (%ebx)
 
 	leave
 	ret $8
 
 3:
-	pop %edx
-	pop %ecx
-	pop %ebx
-	movl %ecx, %eax
+	movl -4(%ebp), %ebx
+	movl -8(%ebp), %eax
+	movl -12(%ebp), %edx
 
 	movl 8(%ebp), %ebx
 	cmpl $0, gc_offset(%ebx)
@@ -305,7 +304,7 @@ String.equals:
 
 .globl String.concat
 String.concat:
-	enter $0, $0
+	enter $4, $0
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -317,22 +316,22 @@ String.concat:
 	movl offset_of_Int.value(%eax), %eax
 	movl offset_of_Int.value(%ebx), %ebx
 	addl %eax, %ebx
-	push %ebx
+	movl %ebx, -4(%ebp)
 
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
 
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %ebx, offset_of_Int.value(%eax)
-	push %eax
+	movl %eax, -4(%ebp)
 
 	movl %ebx, %eax
 	addl $size_of_String, %eax
 	movl $tag_of_String, %ebx
 	call gc_alloc
 
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %ebx, offset_of_String.length(%eax)
 	leal offset_of_String.str_field(%eax), %edi
 	decl gc_offset(%ebx)
@@ -377,7 +376,7 @@ String._check_bounds:
 
 .globl String.substring
 String.substring:
-	enter $0, $0
+	enter $4, $0
 
 	movl 16(%ebp), %eax
 	movl 12(%ebp), %ebx
@@ -389,22 +388,21 @@ String.substring:
 
 	subl %ecx, %edx
 	jb runtime.bounds_panic
-	push %ecx
-	push %edx
+	movl %edx, -4(%ebp)
 
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
-	pop %edx
+	movl -4(%ebp), %edx
 	movl %edx, offset_of_Int.value(%eax)
-	push %eax
+	movl %eax, -4(%ebp)
 
 	movl %edx, %eax
 	addl $size_of_String, %eax
 	movl $tag_of_String, %ebx
 	call gc_alloc
 
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %ebx, offset_of_String.length(%eax)
 	decl gc_offset(%ebx)
 
