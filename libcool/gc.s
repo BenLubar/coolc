@@ -45,14 +45,16 @@ gc_increase_heap:
 
 .globl gc_alloc
 gc_alloc:
-	push %eax
-	push %ebx
+	enter $8, $0
+
+	movl %eax, -4(%ebp)
+	movl %ebx, -8(%ebp)
 	call gc_collect
-	pop %ebx
-	pop %eax
+	movl -4(%ebp), %eax
+	movl -8(%ebp), %ebx
 
 	movl %eax, %ecx
-	push %ebx
+	movl %ebx, -4(%ebp)
 
 1:
 	// eax = current pointer
@@ -92,13 +94,13 @@ gc_alloc:
 
 7:
 	// it's too big. split it up.
-	push %ecx
+	movl %ecx, -8(%ebp)
 	movl %eax, %ebx
 	addl %ecx, %ebx
 	movl $tag_of_garbage, tag_offset(%ebx)
 	movl size_offset(%eax), %ecx
 	movl %ecx, size_offset(%ebx)
-	pop %ecx
+	movl -8(%ebp), %ecx
 	subl %ecx, size_offset(%ebx)
 	movl $gc_tag_garbage, gc_offset(%ebx)
 	subl $data_offset, %ecx
@@ -114,11 +116,11 @@ gc_alloc:
 	jne 5f
 
 	// it is. join them.
-	push %ecx
+	movl %ecx, -8(%ebp)
 	movl size_offset(%ebx), %ecx
 	addl $data_offset, %ecx
 	addl %ecx, size_offset(%eax)
-	pop %ecx
+	movl -8(%ebp), %ecx
 
 	jmp 2b
 
@@ -130,18 +132,19 @@ gc_alloc:
 
 4:
 	// we found enough space! set the meta-fields, then zero out the rest.
-	pop %ebx
+	movl -4(%ebp), %ebx
 	movl %ebx, tag_offset(%eax)
 	movl %ecx, size_offset(%eax)
 	movl $1, gc_offset(%eax)
-	push %eax
+	movl %eax, -4(%ebp)
 	leal data_offset(%eax), %edi
 	movl $0, %eax
 	cld
 	rep stosb
 
-	pop %eax
+	movl -4(%ebp), %eax
 
+	leave
 	ret $0
 
 3:
@@ -150,57 +153,60 @@ gc_alloc:
 	jmp 1b
 
 gc_collect:
+	enter $4, $0
+
+1:
 	// while we're finding new references:
 	movl $0, %ebx
 	movl gc_heap_start, %eax
 
-4:
+2:
 	// mark references
 	cmpl $0, tag_offset(%eax)
-	je 6f
+	je 8f
 	cmpl $gc_tag_garbage, gc_offset(%eax)
-	je 5f
+	je 7f
 	cmpl $gc_tag_none, gc_offset(%eax)
-	je 5f
+	je 7f
 	movl tag_offset(%eax), %ecx
 	shll $2, %ecx
 	movl gc_sizes(%ecx), %ecx
 	cmpl $tag_of_ArrayAny, tag_offset(%eax)
-	jne 7f
+	jne 3f
 	movl offset_of_ArrayAny.length(%eax), %edx
 	addl offset_of_Int.value(%edx), %ecx
 
-7:
+3:
 	leal (data_offset - 4)(%eax), %edx
-	jmp 9f
+	jmp 6f
 
-8:
+4:
 	cmpl $0, (%edx)
-	je 9f
+	je 6f
 	push %edx
 	movl (%edx), %edx
 	cmpl $gc_tag_none, gc_offset(%edx)
-	jne 10f
+	jne 5f
 	movl $gc_tag_live, gc_offset(%edx)
 	movl $1, %ebx
-10:
+5:
 	pop %edx
 
-9:
+6:
 	addl $4, %edx
 	test %ecx, %ecx
-	jz 5f
+	jz 7f
 	subl $1, %ecx
-	jmp 8b
-
-5:
-	addl size_offset(%eax), %eax
-	leal data_offset(%eax), %eax
 	jmp 4b
 
-6:
+7:
+	addl size_offset(%eax), %eax
+	leal data_offset(%eax), %eax
+	jmp 2b
+
+8:
 	test %ebx, %ebx
-	jnz gc_collect
+	jnz 1b
 
 	// now we have:
 	// gc_tag_garbage, gc_tag_root -> unchanged, don't touch
@@ -210,39 +216,40 @@ gc_collect:
 
 	movl gc_heap_start, %eax
 
-11:
+9:
 	cmpl $0, tag_offset(%eax)
-	je 13f
+	je 11f
 	cmpl $gc_tag_none, gc_offset(%eax)
-	jne 12f
+	jne 10f
 	movl $1, %ebx
 	movl $gc_tag_garbage, gc_offset(%eax)
 	movl $tag_of_garbage, tag_offset(%eax)
 
-12:
+10:
 	addl size_offset(%eax), %eax
 	leal data_offset(%eax), %eax
-	jmp 11b
+	jmp 9b
 
-13:
+11:
 	movl gc_heap_start, %eax
 
-1:
+12:
 	// clear GC flags: live->none
 	cmpl $0, tag_offset(%eax)
-	je 3f
+	je 14f
 	cmpl $gc_tag_live, gc_offset(%eax)
-	jne 2f
+	jne 13f
 	movl $gc_tag_none, gc_offset(%eax)
 
-2:
+13:
 	addl size_offset(%eax), %eax
 	leal data_offset(%eax), %eax
-	jmp 1b
+	jmp 12b
 
-3:
+14:
 	// if we freed anything, go back to the beginning.
 	test %ebx, %ebx
-	jnz gc_collect
+	jnz 1b
 
+	leave
 	ret $0
