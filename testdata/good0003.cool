@@ -1,0 +1,46 @@
+class Main() extends IO() {
+	{
+		var syms : ArrayAny = new ArrayAny(10000);
+		var i : Int = 0;
+		while (i < syms.length()) {
+			syms.set(i, symbol("sym".concat(i.toString())));
+			i = i + 1
+		};
+
+		i = 0;
+		while (i < syms.length()) {
+			var sym : Symbol = symbol("sym".concat(i.toString()));
+			var equal : Int = 0;
+			var last : Int = -1;
+			var j : Int = 0;
+			while (j < syms.length()) {
+				if (syms.get(j) == sym)
+					if (sym == syms.get(j)) {
+						equal = equal + 1;
+						last = j
+					} else
+						out("one-way match? A(").out_any(sym).out(")\n")
+				else
+					if (sym == syms.get(j))
+						out("one-way match? B(").out_any(sym).out(")\n")
+					else
+						();
+				j = j + 1
+			};
+
+			if (equal == 1)
+				()
+			else
+				out("equal not 1 for ").out_any(i).out(": ").out_any(equal).out("\n");
+
+			if (last == i)
+				()
+			else
+				out("last not ").out_any(i).out(": ").out_any(last).out("\n");
+
+			i = i + 1
+		};
+
+		out("done\n")
+	};
+}

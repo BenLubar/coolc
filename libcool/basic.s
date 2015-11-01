@@ -131,80 +131,94 @@ IO.in:
 IO.symbol:
 	enter $12, $0
 
+	// there's no state in IO, so release `this`
 	movl 12(%ebp), %eax
 	cmpl $0, gc_offset(%eax)
-	jle 4f
+	jle 1f
 	decl gc_offset(%eax)
-4:
+1:
 
+	// 8(%ebp) = the string we're looking for
+	// -4(%ebp) = the address of the "next" field of the previous symbol
+	// -8(%ebp) = the address of the symbol we're currently looking at
+	// -12(%ebp) = our current hash value
+	movl $symbol, -4(%ebp)
+	movl symbol, %eax
+	movl %eax, -8(%ebp)
+	movl $0, -12(%ebp)
+
+	// make sure we actually have a string
 	movl 8(%ebp), %eax
 	test %eax, %eax
 	jz runtime.null_panic
 
-	lea symbol, %ebx
-	movl symbol, %ecx
-	movl $0, %edx
+2:
+	// add 1 to our hash
+	incl -12(%ebp)
 
-1:
-	test %ecx, %ecx
-	jz 2f
+	// are we at the end?
+	movl -8(%ebp), %eax
+	test %eax, %eax
+	jz 3f
 
-	movl %ebx, -4(%ebp)
-	movl %ecx, -8(%ebp)
-	movl %edx, -12(%ebp)
+	movl offset_of_Symbol.name(%eax), %eax
+	push %eax
 	movl 8(%ebp), %eax
 	push %eax
-	movl offset_of_Symbol.name(%ecx), %eax
-	push %eax
 	call String.equals
-	lea boolean_true, %ebx
-	cmpl %ebx, %eax
-	je 3f
-	movl -4(%ebp), %ebx
-	movl -8(%ebp), %ecx
-	movl -12(%ebp), %edx
+	cmpl $boolean_true, %eax
+	je 4f
 
-	lea offset_of_Symbol.next(%ecx), %ebx
-	movl offset_of_Symbol.next(%ecx), %ecx
-	incl %edx
-	jmp 1b
+	// go to the next one
+	movl -8(%ebp), %eax
+	leal offset_of_Symbol.next(%eax), %eax
+	movl %eax, -4(%ebp)
+	movl (%eax), %eax
+	movl %eax, -8(%ebp)
+	jmp 2b
 
-2:
-	movl %ebx, -4(%ebp)
-	movl %edx, -8(%ebp)
+3:
+	// box the hash
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
-	movl -8(%ebp), %edx
-	movl %edx, offset_of_Int.value(%eax)
-	movl %eax, -8(%ebp)
+	movl $gc_tag_root, gc_offset(%eax)
+	movl -12(%ebp), %ebx
+	movl %ebx, offset_of_Int.value(%eax)
+	movl %eax, -12(%ebp)
+
+	// mark the string and its length as a root
+	movl 8(%ebp), %eax
+	movl $gc_tag_root, gc_offset(%eax)
+	movl offset_of_String.length(%eax), %eax
+	movl $gc_tag_root, gc_offset(%eax)
+
+	// make a new symbol object
 	movl $size_of_Symbol, %eax
 	movl $tag_of_Symbol, %ebx
 	call gc_alloc
 	movl $gc_tag_root, gc_offset(%eax)
-	movl -8(%ebp), %edx
-	movl %edx, offset_of_Symbol.hash(%eax)
-	movl 8(%ebp), %ecx
-	movl $gc_tag_root, gc_offset(%ecx)
-	movl %ecx, offset_of_Symbol.name(%eax)
-	movl offset_of_String.length(%ecx), %ecx
-	movl $gc_tag_root, gc_offset(%ecx)
+	movl 8(%ebp), %ebx
+	movl %ebx, offset_of_Symbol.name(%eax)
+	movl -12(%ebp), %ebx
+	movl %ebx, offset_of_Symbol.hash(%eax)
+
+	// save it at the end of the list
 	movl -4(%ebp), %ebx
 	movl %eax, (%ebx)
 
 	leave
 	ret $8
 
-3:
-	movl -4(%ebp), %ebx
-	movl -8(%ebp), %eax
-	movl -12(%ebp), %edx
-
-	movl 8(%ebp), %ebx
-	cmpl $0, gc_offset(%ebx)
+4:
+	// let the string be garbage collected
+	movl 8(%ebp), %eax
+	cmpl $0, gc_offset(%eax)
 	jle 5f
-	decl gc_offset(%ebx)
+	decl gc_offset(%eax)
 5:
+	// grab the symbol we found
+	movl -8(%ebp), %eax
 
 	leave
 	ret $8
@@ -518,11 +532,15 @@ ArrayAny.set:
 	movl (%eax), %ebx
 	movl %ecx, (%eax)
 	movl %ebx, %eax
+	test %eax, %eax
+	jz 1f
 	cmpl $0, gc_offset(%eax)
 	jl 1f
 	incl gc_offset(%eax)
 1:
 	movl 8(%ebp), %ebx
+	test %ebx, %ebx
+	jz 2f
 	cmpl $0, gc_offset(%ebx)
 	jle 2f
 	decl gc_offset(%ebx)
@@ -545,21 +563,26 @@ ArrayAny.set:
 ArrayAny.ArrayAny:
 	enter $0, $0
 
+	// top 3 bits of length must be unset
 	movl 8(%ebp), %eax
 	movl offset_of_Int.value(%eax), %eax
-	cmpl $0, %eax
-	jl runtime.bounds_panic
-	shll $2, %eax
-	addl $4, %eax
-	cmpl $0, %eax
-	jl runtime.bounds_panic
+	test $0xE0000000, %eax
+	jnz runtime.bounds_panic
 
+	// make sure length doesn't overflow
+	shll $2, %eax
+	addl $size_of_ArrayAny, %eax
+	jc runtime.bounds_panic
+
+	// get the actual size
 	movl 12(%ebp), %ebx
 	movl size_offset(%ebx), %ecx
 
+	// check if we're big enough
 	cmpl %eax, %ecx
 	jl 1f
 
+	// we're big enough, so let's keep going
 	movl 12(%ebp), %eax
 
 2:
@@ -575,11 +598,14 @@ ArrayAny.ArrayAny:
 	ret $8
 
 1:
+	// let the old one be garbage collected
+	movl 12(%ebp), %ecx
 	cmpl $0, gc_offset(%ecx)
 	jle 4f
 	decl gc_offset(%ecx)
 4:
 
+	// %eax already holds the size we need
 	movl $tag_of_ArrayAny, %ebx
 	call gc_alloc
 

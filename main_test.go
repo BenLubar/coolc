@@ -63,7 +63,7 @@ func TestBad(t *testing.T) {
 }
 
 func TestGood(t *testing.T) {
-	const expected = 3
+	const expected = 4
 
 	cwd, err := os.Getwd()
 	if err != nil {

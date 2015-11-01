@@ -183,14 +183,14 @@ gc_collect:
 4:
 	cmpl $0, (%edx)
 	je 6f
-	push %edx
+	movl %edx, -4(%ebp)
 	movl (%edx), %edx
 	cmpl $gc_tag_none, gc_offset(%edx)
 	jne 5f
 	movl $gc_tag_live, gc_offset(%edx)
 	movl $1, %ebx
 5:
-	pop %edx
+	movl -4(%ebp), %edx
 
 6:
 	addl $4, %edx
