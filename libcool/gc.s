@@ -53,6 +53,10 @@ gc_alloc:
 	movl -4(%ebp), %eax
 	movl -8(%ebp), %ebx
 
+	// make sure it's aligned
+	addl $3, %eax
+	andl $-4, %eax
+
 	movl %eax, %ecx
 	movl %ebx, -4(%ebp)
 
@@ -144,6 +148,8 @@ gc_alloc:
 
 	movl -4(%ebp), %eax
 
+	call gc_check
+
 	leave
 	ret $0
 
@@ -154,6 +160,9 @@ gc_alloc:
 
 gc_collect:
 	enter $4, $0
+
+	movl $0, %eax
+	call gc_check
 
 1:
 	// while we're finding new references:
@@ -251,5 +260,139 @@ gc_collect:
 	test %ebx, %ebx
 	jnz 1b
 
+	movl $0, %eax
+	call gc_check
+
+	leave
+	ret $0
+
+.globl gc_check
+gc_check:
+	enter $4, $0
+	movl %eax, -4(%ebp)
+
+	movl gc_heap_start, %eax
+1:
+	cmpl $0, tag_offset(%eax)
+	je 18f
+	jg 6f
+
+	// it is garbage
+	cmpl $tag_of_garbage, tag_offset(%eax)
+	je 2f
+	// garbage has invalid tag
+	int $3
+2:
+	cmpl $gc_tag_garbage, gc_offset(%eax)
+	je 3f
+	// garbage has invalid GC tag
+	int $3
+3:
+	movl size_offset(%eax), %ebx
+	cmpl $0, %ebx
+	jge 4f
+	// garbage has negative size
+	int $3
+4:
+	test $3, %ebx
+	jz 5f
+	// garbage has non-aligned size
+	int $3
+5:
+	// go to the next object
+	addl size_offset(%eax), %eax
+	addl $data_offset, %eax
+	jmp 1b
+
+6:
+	cmpl $max_tag, tag_offset(%eax)
+	jle 7f
+	// invalid tag
+	int $3
+7:
+	cmpl $gc_tag_root, gc_offset(%eax)
+	je 8f
+	cmpl $0, gc_offset(%eax)
+	jge 8f
+	// invalid GC tag
+	int $3
+8:
+	movl size_offset(%eax), %ebx
+	cmpl $0, %ebx
+	jge 9f
+	// object has negative size
+	int $3
+9:
+	test $3, %ebx
+	jz 10f
+	// object has non-aligned size
+	int $3
+10:
+	movl tag_offset(%eax), %ebx
+	shll $2, %ebx
+	movl gc_sizes(%ebx), %ebx
+	movl %ebx, %ecx
+	shll $2, %ecx
+	cmpl $tag_of_Int, tag_offset(%eax)
+	je 12f
+	cmpl $tag_of_String, tag_offset(%eax)
+	je 13f
+	cmpl $tag_of_ArrayAny, tag_offset(%eax)
+	je 14f
+11:
+	movl %eax, %edx
+	addl $data_offset, %edx
+	cmpl %ecx, size_offset(%eax)
+	jge 15f
+	// object is too small for contents
+	int $3
+	jmp 15f
+12:
+	// special case: Int has 4 extra bytes
+	addl $4, %ecx
+	jmp 11b
+13:
+	// special case: String has (length) extra bytes
+	movl offset_of_String.length(%eax), %edx
+	test %edx, %edx
+	jz 11b
+	addl offset_of_Int.value(%edx), %ecx
+	jmp 11b
+14:
+	// special case: ArrayAny has (length) extra pointers
+	movl offset_of_ArrayAny.length(%eax), %edx
+	test %edx, %edx
+	jz 11b
+	addl offset_of_Int.value(%edx), %ebx
+	movl %ebx, %ecx
+	shll $2, %ecx
+	jmp 11b
+15:
+	// check each pointer
+	test %ebx, %ebx
+	jz 5b
+	decl %ebx
+
+	movl (%edx), %ecx
+	test %ecx, %ecx
+	// don't follow null pointer
+	jz 17f
+
+	cmpl $0, tag_offset(%ecx)
+	jg 16f
+	// pointer is garbage
+	int $3
+16:
+	cmpl $max_tag, tag_offset(%ecx)
+	jle 17f
+	// pointer has invalid tag (probably garbage)
+	int $3
+17:
+	// go to the next pointer
+	addl $4, %edx
+	jmp 15b
+
+18:
+	movl -4(%ebp), %eax
 	leave
 	ret $0
