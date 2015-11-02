@@ -198,6 +198,12 @@ type JumpExpr interface {
 	genCodeJump(*genCtx, string, string)
 }
 
+type UnusedExpr interface {
+	Expr
+
+	genCodeUnused(*genCtx)
+}
+
 // NotExpr is an expression of the form `!x`.
 type NotExpr struct {
 	// Expr is `x` in the expression `!x`.
