@@ -250,11 +250,34 @@ func genGC(ctx *genCtx, reg string) {
 	ctx.Printf("%s:\n", label_done)
 }
 
+func genCodeRawInt(ctx *genCtx, e Expr) {
+	if raw, ok := e.(ArithmeticExpr); ok {
+		raw.genCodeRawInt(ctx)
+	} else {
+		e.genCode(ctx)
+		genGC(ctx, "%eax")
+		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
+	}
+}
+
 func genCodeJump(ctx *genCtx, e Expr, l0, l1 string) {
-	e.genCode(ctx)
-	ctx.Printf("\tcmpl $boolean_false, %%eax\n")
-	ctx.Printf("\tje %s\n", l0)
-	ctx.Printf("\tjmp %s\n", l1)
+	if raw, ok := e.(JumpExpr); ok {
+		raw.genCodeJump(ctx, l0, l1)
+	} else {
+		e.genCode(ctx)
+		ctx.Printf("\tcmpl $boolean_false, %%eax\n")
+		ctx.Printf("\tje %s\n", l0)
+		ctx.Printf("\tjmp %s\n", l1)
+	}
+}
+
+func genCodeUnused(ctx *genCtx, e Expr) {
+	if raw, ok := e.(UnusedExpr); ok {
+		raw.genCodeUnused(ctx)
+	} else {
+		e.genCode(ctx)
+		genGC(ctx, "%eax")
+	}
 }
 
 func (c *Class) genCode(ctx *genCtx) {
@@ -296,11 +319,7 @@ func (e *NotExpr) genCode(ctx *genCtx) {
 }
 
 func (e *NotExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
-	if raw, ok := e.Expr.(JumpExpr); ok {
-		raw.genCodeJump(ctx, l1, l0)
-	} else {
-		genCodeJump(ctx, e.Expr, l1, l0)
-	}
+	genCodeJump(ctx, e.Expr, l1, l0)
 }
 
 func (e *NegativeExpr) genCollectLiterals(ctx *genCtx) {
@@ -322,14 +341,8 @@ func (e *NegativeExpr) genCode(ctx *genCtx) {
 	ctx.Printf("\tcall gc_alloc\n")
 	ctx.Printf("\tmovl %%eax, %d(%%ebp)\n", offset)
 
-	if raw, ok := e.Expr.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-		ctx.Printf("\tmovl %%eax, %%ebx\n")
-	} else {
-		e.Expr.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%ebx\n")
-	}
+	genCodeRawInt(ctx, e.Expr)
+	ctx.Printf("\tmovl %%eax, %%ebx\n")
 
 	ctx.Printf("\tmovl %d(%%ebp), %%eax\n", offset)
 	unreserve()
@@ -339,14 +352,7 @@ func (e *NegativeExpr) genCode(ctx *genCtx) {
 }
 
 func (e *NegativeExpr) genCodeRawInt(ctx *genCtx) {
-	if raw, ok := e.Expr.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Expr.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
-
+	genCodeRawInt(ctx, e.Expr)
 	ctx.Printf("\tnegl %%eax\n")
 }
 
@@ -372,13 +378,7 @@ func (e *IfExpr) genCodeShared(ctx *genCtx, t, f func()) {
 	label_false := ctx.Label()
 	label_done := ctx.Label()
 
-	if raw, ok := e.Cond.(JumpExpr); ok {
-		raw.genCodeJump(ctx, label_false+"f", label_true+"f")
-	} else {
-		e.Cond.genCode(ctx)
-		ctx.Printf("\tcmpl $boolean_false, %%eax\n")
-		ctx.Printf("\tje %sf\n", label_false)
-	}
+	genCodeJump(ctx, e.Cond, label_false+"f", label_true+"f")
 
 	ctx.Printf("%s:\n", label_true)
 	t()
@@ -398,55 +398,25 @@ func (e *IfExpr) genCode(ctx *genCtx) {
 
 func (e *IfExpr) genCodeRawInt(ctx *genCtx) {
 	e.genCodeShared(ctx, func() {
-		if raw, ok := e.Then.(ArithmeticExpr); ok {
-			raw.genCodeRawInt(ctx)
-		} else {
-			e.Then.genCode(ctx)
-			genGC(ctx, "%eax")
-			ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-		}
+		genCodeRawInt(ctx, e.Then)
 	}, func() {
-		if raw, ok := e.Else.(ArithmeticExpr); ok {
-			raw.genCodeRawInt(ctx)
-		} else {
-			e.Else.genCode(ctx)
-			genGC(ctx, "%eax")
-			ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-		}
+		genCodeRawInt(ctx, e.Else)
 	})
 }
 
 func (e *IfExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
 	e.genCodeShared(ctx, func() {
-		if raw, ok := e.Then.(JumpExpr); ok {
-			raw.genCodeJump(ctx, l0, l1)
-		} else {
-			genCodeJump(ctx, e.Then, l0, l1)
-		}
+		genCodeJump(ctx, e.Then, l0, l1)
 	}, func() {
-		if raw, ok := e.Else.(JumpExpr); ok {
-			raw.genCodeJump(ctx, l0, l1)
-		} else {
-			genCodeJump(ctx, e.Else, l0, l1)
-		}
+		genCodeJump(ctx, e.Else, l0, l1)
 	})
 }
 
 func (e *IfExpr) genCodeUnused(ctx *genCtx) {
 	e.genCodeShared(ctx, func() {
-		if raw, ok := e.Then.(UnusedExpr); ok {
-			raw.genCodeUnused(ctx)
-		} else {
-			e.Then.genCode(ctx)
-			genGC(ctx, "%eax")
-		}
+		genCodeUnused(ctx, e.Then)
 	}, func() {
-		if raw, ok := e.Else.(UnusedExpr); ok {
-			raw.genCodeUnused(ctx)
-		} else {
-			e.Else.genCode(ctx)
-			genGC(ctx, "%eax")
-		}
+		genCodeUnused(ctx, e.Else)
 	})
 }
 
@@ -474,20 +444,9 @@ func (e *WhileExpr) genCodeUnused(ctx *genCtx) {
 	label_done := ctx.Label()
 
 	ctx.Printf("%s:\n", label_cond)
-	if raw, ok := e.Cond.(JumpExpr); ok {
-		raw.genCodeJump(ctx, label_done+"f", label_body+"f")
-	} else {
-		e.Cond.genCode(ctx)
-		ctx.Printf("\tcmpl $boolean_false, %%eax\n")
-		ctx.Printf("\tje %sf\n", label_done)
-	}
+	genCodeJump(ctx, e.Cond, label_done+"f", label_body+"f")
 	ctx.Printf("%s:\n", label_body)
-	if raw, ok := e.Body.(UnusedExpr); ok {
-		raw.genCodeUnused(ctx)
-	} else {
-		e.Body.genCode(ctx)
-		genGC(ctx, "%eax")
-	}
+	genCodeUnused(ctx, e.Body)
 	ctx.Printf("\tjmp %sb\n", label_cond)
 	ctx.Printf("%s:\n", label_done)
 }
@@ -520,22 +479,10 @@ func (e *LessOrEqualExpr) genCode(ctx *genCtx) {
 }
 
 func (e *LessOrEqualExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
-	if raw, ok := e.Left.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Left.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, e.Left)
 	offset, unreserve := ctx.Slot()
 	ctx.Printf("\tmovl %%eax, %d(%%ebp)\n", offset)
-	if raw, ok := e.Right.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Right.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, e.Right)
 	ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", offset)
 	unreserve()
 	ctx.Printf("\tcmpl %%eax, %%ebx\n")
@@ -571,22 +518,10 @@ func (e *LessThanExpr) genCode(ctx *genCtx) {
 }
 
 func (e *LessThanExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
-	if raw, ok := e.Left.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Left.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, e.Left)
 	offset, unreserve := ctx.Slot()
 	ctx.Printf("\tmovl %%eax, %d(%%ebp)\n", offset)
-	if raw, ok := e.Right.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Right.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, e.Right)
 	ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", offset)
 	unreserve()
 	ctx.Printf("\tcmpl %%eax, %%ebx\n")
@@ -595,22 +530,10 @@ func (e *LessThanExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
 }
 
 func genArithmetic(ctx *genCtx, left, right Expr, compute func(), box bool) {
-	if raw, ok := left.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		left.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, left)
 	offset, unreserve := ctx.Slot()
 	ctx.Printf("\tmovl %%eax, %d(%%ebp)\n", offset)
-	if raw, ok := right.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		right.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, right)
 	ctx.Printf("\tmovl %%eax, %%ecx\n")
 	ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", offset)
 	compute()
@@ -1157,24 +1080,13 @@ func (e *VarExpr) genCode(ctx *genCtx) {
 
 func (e *VarExpr) genCodeRawInt(ctx *genCtx) {
 	e.genCodeShared(ctx, func() {
-		if raw, ok := e.Body.(ArithmeticExpr); ok {
-			raw.genCodeRawInt(ctx)
-		} else {
-			e.Body.genCode(ctx)
-			genGC(ctx, "%eax")
-			ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-		}
+		genCodeRawInt(ctx, e.Body)
 	})
 }
 
 func (e *VarExpr) genCodeUnused(ctx *genCtx) {
 	e.genCodeShared(ctx, func() {
-		if raw, ok := e.Body.(UnusedExpr); ok {
-			raw.genCodeUnused(ctx)
-		} else {
-			e.Body.genCode(ctx)
-			genGC(ctx, "%eax")
-		}
+		genCodeUnused(ctx, e.Body)
 	})
 }
 
@@ -1191,48 +1103,24 @@ func (e *ChainExpr) genCountVars(ctx *genCtx) int {
 	return vars
 }
 
-func (e *ChainExpr) genCodeShared(ctx *genCtx) {
-	if raw, ok := e.Pre.(UnusedExpr); ok {
-		raw.genCodeUnused(ctx)
-	} else {
-		e.Pre.genCode(ctx)
-		genGC(ctx, "%eax")
-	}
-}
-
 func (e *ChainExpr) genCode(ctx *genCtx) {
-	e.genCodeShared(ctx)
+	genCodeUnused(ctx, e.Pre)
 	e.Expr.genCode(ctx)
 }
 
 func (e *ChainExpr) genCodeRawInt(ctx *genCtx) {
-	e.genCodeShared(ctx)
-	if raw, ok := e.Expr.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		e.Expr.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeUnused(ctx, e.Pre)
+	genCodeRawInt(ctx, e.Expr)
 }
 
 func (e *ChainExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
-	e.genCodeShared(ctx)
-	if raw, ok := e.Expr.(JumpExpr); ok {
-		raw.genCodeJump(ctx, l0, l1)
-	} else {
-		genCodeJump(ctx, e.Expr, l0, l1)
-	}
+	genCodeUnused(ctx, e.Pre)
+	genCodeJump(ctx, e.Expr, l0, l1)
 }
 
 func (e *ChainExpr) genCodeUnused(ctx *genCtx) {
-	e.genCodeShared(ctx)
-	if raw, ok := e.Expr.(UnusedExpr); ok {
-		raw.genCodeUnused(ctx)
-	} else {
-		e.Expr.genCode(ctx)
-		genGC(ctx, "%eax")
-	}
+	genCodeUnused(ctx, e.Pre)
+	genCodeUnused(ctx, e.Expr)
 }
 
 func (e *ThisExpr) genCollectLiterals(ctx *genCtx) {
@@ -1395,28 +1283,13 @@ func (c *Case) genCode(ctx *genCtx) {
 }
 
 func (c *Case) genCodeRawInt(ctx *genCtx) {
-	if raw, ok := c.Body.(ArithmeticExpr); ok {
-		raw.genCodeRawInt(ctx)
-	} else {
-		c.Body.genCode(ctx)
-		genGC(ctx, "%eax")
-		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
-	}
+	genCodeRawInt(ctx, c.Body)
 }
 
 func (c *Case) genCodeJump(ctx *genCtx, l0, l1 string) {
-	if raw, ok := c.Body.(JumpExpr); ok {
-		raw.genCodeJump(ctx, l0, l1)
-	} else {
-		genCodeJump(ctx, c.Body, l0, l1)
-	}
+	genCodeJump(ctx, c.Body, l0, l1)
 }
 
 func (c *Case) genCodeUnused(ctx *genCtx) {
-	if raw, ok := c.Body.(UnusedExpr); ok {
-		raw.genCodeUnused(ctx)
-	} else {
-		c.Body.genCode(ctx)
-		genGC(ctx, "%eax")
-	}
+	genCodeUnused(ctx, c.Body)
 }
