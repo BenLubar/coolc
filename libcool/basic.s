@@ -162,8 +162,16 @@ IO.symbol:
 	jz 3f
 
 	movl offset_of_Symbol.name(%eax), %eax
+	cmpl $0, gc_offset(%eax)
+	jl 6f
+	incl gc_offset(%eax)
+6:
 	push %eax
 	movl 8(%ebp), %eax
+	cmpl $0, gc_offset(%eax)
+	jl 7f
+	incl gc_offset(%eax)
+7:
 	push %eax
 	call String.equals
 	cmpl $boolean_true, %eax
@@ -207,6 +215,8 @@ IO.symbol:
 	movl -4(%ebp), %ebx
 	movl %eax, (%ebx)
 
+	call gc_check
+
 	leave
 	ret $8
 
@@ -219,6 +229,8 @@ IO.symbol:
 5:
 	// grab the symbol we found
 	movl -8(%ebp), %eax
+
+	call gc_check
 
 	leave
 	ret $8

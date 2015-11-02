@@ -1,6 +1,6 @@
 class Main() extends IO() {
 	{
-		var syms : ArrayAny = new ArrayAny(10000);
+		var syms : ArrayAny = new ArrayAny(100);
 		var i : Int = 0;
 		while (i < syms.length()) {
 			syms.set(i, symbol("sym".concat(i.toString())));

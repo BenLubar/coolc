@@ -148,7 +148,7 @@ gc_alloc:
 
 	movl -4(%ebp), %eax
 
-	call gc_check
+	//call gc_check
 
 	leave
 	ret $0
@@ -161,8 +161,8 @@ gc_alloc:
 gc_collect:
 	enter $4, $0
 
-	movl $0, %eax
-	call gc_check
+	//movl $0, %eax
+	//call gc_check
 
 1:
 	// while we're finding new references:
@@ -260,8 +260,8 @@ gc_collect:
 	test %ebx, %ebx
 	jnz 1b
 
-	movl $0, %eax
-	call gc_check
+	//movl $0, %eax
+	//call gc_check
 
 	leave
 	ret $0

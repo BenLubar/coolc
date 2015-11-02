@@ -189,8 +189,8 @@ func genMethod(w io.Writer, name string, args int, body Expr, hasArgs bool) {
 	vars := body.genCountVars(args*4 + 8)
 	fmt.Fprintf(w, "\tenter $%d, $0\n", vars*4)
 
-	fmt.Fprintf(w, "\tmovl $0, %%eax\n")
-	fmt.Fprintf(w, "\tcall gc_check\n")
+	//fmt.Fprintf(w, "\tmovl $0, %%eax\n")
+	//fmt.Fprintf(w, "\tcall gc_check\n")
 
 	varsUsed := 0
 	label := 0
@@ -218,7 +218,7 @@ func genMethod(w io.Writer, name string, args int, body Expr, hasArgs bool) {
 		}
 	}
 
-	fmt.Fprintf(w, "\tcall gc_check\n")
+	//fmt.Fprintf(w, "\tcall gc_check\n")
 
 	fmt.Fprintf(w, "\tleave\n")
 	fmt.Fprintf(w, "\tret $%d\n", args*4+4)
