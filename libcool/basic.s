@@ -215,8 +215,6 @@ IO.symbol:
 	movl -4(%ebp), %ebx
 	movl %eax, (%ebx)
 
-	call gc_check
-
 	leave
 	ret $8
 
@@ -229,8 +227,6 @@ IO.symbol:
 5:
 	// grab the symbol we found
 	movl -8(%ebp), %eax
-
-	call gc_check
 
 	leave
 	ret $8
