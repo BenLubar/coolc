@@ -263,6 +263,197 @@ IO.symbol_name:
 	leave
 	ret $8
 
+.data
+
+int_lit_min_int_length:
+	.long tag_of_Int
+	.long size_of_Int + 4
+	.long gc_tag_root
+	.long string_lit_min_int_length
+
+string_lit_min_int:
+	.long tag_of_String
+	.long size_of_String + string_lit_min_int_length
+	.long gc_tag_root
+	.long int_lit_min_int_length
+string_lit_min_int_start:
+	.ascii "-2147483648"
+	.set string_lit_min_int_length, .-string_lit_min_int_start
+
+.text
+
+.globl Int.toString
+Int.toString:
+	enter $4, $0
+
+	movl 8(%ebp), %eax
+	cmpl $0, gc_offset(%eax)
+	jle 1f
+	decl gc_offset(%eax)
+1:
+	movl offset_of_Int.value(%eax), %eax
+
+	cmpl $-2147483648, %eax
+	jne 2f
+
+	movl $string_lit_min_int, %eax
+	leave
+	ret $4
+2:
+	movl %eax, 8(%ebp)
+
+	movl $(size_of_Int + 4), %eax
+	movl $tag_of_Int, %ebx
+	call gc_alloc
+	movl %eax, -4(%ebp)
+
+	movl $(size_of_String + string_lit_min_int_length), %eax
+	movl $tag_of_String, %ebx
+	call gc_alloc
+	movl -4(%ebp), %edx
+	decl gc_offset(%edx)
+	movl %edx, offset_of_String.length(%eax)
+	movl %eax, -4(%ebp)
+
+	movl 8(%ebp), %ebx
+	leal offset_of_String.str_field(%eax), %ecx
+	movl $string_lit_min_int_length, offset_of_Int.value(%edx)
+	cmpl $0, %ebx
+	jl 3f
+	jg 4f
+
+	movb $0x30, (%ecx)
+	movl $1, offset_of_Int.value(%edx)
+
+	leave
+	ret $4
+
+3:
+	movb $0x2D, (%ecx)
+	incl %ecx
+	incl offset_of_Int.value(%edx)
+	negl %ebx
+4:
+	decl offset_of_Int.value(%edx)
+	cmpl $1000000000, %ebx
+	jge 5f
+	decl offset_of_Int.value(%edx)
+	cmpl $100000000, %ebx
+	jge 6f
+	decl offset_of_Int.value(%edx)
+	cmpl $10000000, %ebx
+	jge 7f
+	decl offset_of_Int.value(%edx)
+	cmpl $1000000, %ebx
+	jge 8f
+	decl offset_of_Int.value(%edx)
+	cmpl $100000, %ebx
+	jge 9f
+	decl offset_of_Int.value(%edx)
+	cmpl $10000, %ebx
+	jge 10f
+	decl offset_of_Int.value(%edx)
+	cmpl $1000, %ebx
+	jge 11f
+	decl offset_of_Int.value(%edx)
+	cmpl $100, %ebx
+	jge 12f
+	decl offset_of_Int.value(%edx)
+	cmpl $10, %ebx
+	jge 13f
+	decl offset_of_Int.value(%edx)
+	jmp 14f
+
+5:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $1000000000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+6:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $100000000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+7:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $10000000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+8:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $1000000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+9:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $100000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+10:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $10000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+11:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $1000, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+12:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $100, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+13:
+	movl %ebx, %eax
+	movl $0, %edx
+	movl $10, %ebx
+	divl %ebx
+	addl $0x30, %eax
+	movb %al, (%ecx)
+	incl %ecx
+	movl %edx, %ebx
+14:
+	addl $0x30, %ebx
+	movb %bl, (%ecx)
+
+	movl -4(%ebp), %eax
+
+	leave
+	ret $4
+
 .globl Int.equals
 Int.equals:
 	enter $0, $0
