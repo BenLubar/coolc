@@ -6,8 +6,6 @@
 symbol:
 	.long 0
 
-.set max_line_length, 0x400
-
 .globl boolean_false
 .align 2
 boolean_false:
@@ -125,10 +123,11 @@ IO.in:
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
 	call gc_alloc
-	movl $(size_of_String + max_line_length), offset_of_Int.value(%eax)
+	movl $runtime_input_max, offset_of_Int.value(%eax)
 	movl %eax, -4(%ebp)
 
-	movl $(size_of_String + max_line_length), %eax
+	movl $size_of_String, %eax
+	addl $runtime_input_max, %eax
 	movl $tag_of_String, %ebx
 	call gc_alloc
 

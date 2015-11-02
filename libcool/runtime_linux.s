@@ -2,6 +2,7 @@
 
 .data
 
+.globl runtime_input_max
 .set runtime_input_max, 0x400
 
 .align 2
