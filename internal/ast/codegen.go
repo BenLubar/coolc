@@ -907,12 +907,16 @@ func (e *DynamicCallExpr) genCode(w io.Writer, label func() string, slot func() 
 		a.genCode(w, label, slot)
 		fmt.Fprintf(w, "\tpush %%eax\n")
 	}
-	fmt.Fprintf(w, "\tmovl %d(%%esp), %%eax\n", len(e.Args)*4)
-	fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tshll $2, %%eax\n")
-	fmt.Fprintf(w, "\tmovl method_tables(%%eax), %%eax\n")
-	fmt.Fprintf(w, "\tmovl method_offset_%s.%s(%%eax), %%eax\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
-	fmt.Fprintf(w, "\tcall *%%eax\n")
+	if e.HasOverride {
+		fmt.Fprintf(w, "\tmovl %d(%%esp), %%eax\n", len(e.Args)*4)
+		fmt.Fprintf(w, "\tmovl tag_offset(%%eax), %%eax\n")
+		fmt.Fprintf(w, "\tshll $2, %%eax\n")
+		fmt.Fprintf(w, "\tmovl method_tables(%%eax), %%eax\n")
+		fmt.Fprintf(w, "\tmovl method_offset_%s.%s(%%eax), %%eax\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
+		fmt.Fprintf(w, "\tcall *%%eax\n")
+	} else {
+		fmt.Fprintf(w, "\tcall %s.%s\n", e.Name.Method.Parent.Type.Name, e.Name.Method.Name.Name)
+	}
 }
 
 func (e *SuperCallExpr) genCollectLiterals(ints func(int32) int, strings func(string) int) {

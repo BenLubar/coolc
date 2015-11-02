@@ -431,10 +431,20 @@ func (c *Class) semantMethods(report func(token.Pos, string), less func(*Class, 
 						report(m.Type.Pos, "invalid override: method "+c.Type.Name+"."+m.Name.Name+" has incompatible return type "+m.Type.Name)
 						report(override.Type.Pos, "(parent return type is "+override.Type.Name+")")
 					}
+
+					for p := c.Extends.Type.Class; p != nativeClass; p = p.Extends.Type.Class {
+						if m.Order < len(p.HasOverride) {
+							p.HasOverride[m.Order] = true
+						} else {
+							break
+						}
+					}
 				}
 			}
 		}
 	}
+
+	c.HasOverride = make([]bool, len(c.Methods))
 }
 
 type semantIdentifier struct {
@@ -775,7 +785,7 @@ func (e *DynamicCallExpr) semantTypes(lookup func(*Ident), c *Class) {
 func (e *DynamicCallExpr) semantIdentifiers(report func(token.Pos, string), less func(*Class, *Ident), lub func(...*Class) *Class, ids semantIdentifiers) *Class {
 	left := e.Recv.semantIdentifiers(report, less, lub, ids)
 
-	for _, m := range left.Methods {
+	for i, m := range left.Methods {
 		if m.Name.Name == e.Name.Name {
 			e.Name.Method = m
 
@@ -787,6 +797,8 @@ func (e *DynamicCallExpr) semantIdentifiers(report func(token.Pos, string), less
 					less(a.semantIdentifiers(report, less, lub, ids), m.Args[i].Type)
 				}
 			}
+
+			e.HasOverride = left.HasOverride[i]
 
 			return m.Type.Class
 		}

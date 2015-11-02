@@ -55,6 +55,9 @@ type Class struct {
 	// overriding the parent's methods. The methods in Methods may be
 	// from an ancestor class.
 	Methods []*Method
+	// HasOverride is true for any method that was overridden in a child
+	// class. Used for optimization.
+	HasOverride []bool
 
 	// Size is the size in bytes of this class, not counting metadata or
 	// native fields.
@@ -317,6 +320,9 @@ type DynamicCallExpr struct {
 	Name *Ident
 	// Args are the arguments given to the method call.
 	Args []Expr
+
+	// HasOverride is true if the method called is unknown at compile time.
+	HasOverride bool
 }
 
 // SuperCallExpr is an expression of the form `super.x(...)`.
