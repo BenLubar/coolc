@@ -3,7 +3,6 @@ package ast
 import (
 	"fmt"
 	"go/token"
-	"io"
 )
 
 // Program is a set of classes with a generated main method that is called by
@@ -180,23 +179,23 @@ type Expr interface {
 	semantTypes(func(*Ident), *Class)
 	semantIdentifiers(func(token.Pos, string), func(*Class, *Ident), func(...*Class) *Class, semantIdentifiers) *Class
 
-	genCollectLiterals(func(int32) int, func(string) int)
-	genCountVars(int) int
-	genCode(io.Writer, func() string, func() (int, func()))
+	genCollectLiterals(*genCtx)
+	genCountVars(*genCtx) int
+	genCode(*genCtx)
 }
 
 // ArithmeticExpr is an expression that can return an unboxed integer.
 type ArithmeticExpr interface {
 	Expr
 
-	genCodeRawInt(io.Writer, func() string, func() (int, func()))
+	genCodeRawInt(*genCtx)
 }
 
 // JumpExpr is an expression that can jump instead of returning a boolean.
 type JumpExpr interface {
 	Expr
 
-	genCodeJump(io.Writer, string, string, func() string, func() (int, func()))
+	genCodeJump(*genCtx, string, string)
 }
 
 // NotExpr is an expression of the form `!x`.
@@ -337,9 +336,6 @@ type SuperCallExpr struct {
 	// Class is the parent of the class this expression is lexically
 	// within.
 	Class *Class
-
-	// This is the stack offset of `this` in the current method.
-	This int
 }
 
 // StaticCallExpr is used for expressions of the form `new X(...)`.
@@ -368,9 +364,6 @@ type AssignExpr struct {
 
 	// Unit is a generated identifier for the Unit class in basic.cool.
 	Unit *Ident
-
-	// This is the stack offset of `this` in the current method.
-	This int
 }
 
 // VarExpr is an expression of the form `var x : X = y; z`.
@@ -422,9 +415,6 @@ type ThisExpr struct {
 
 	// Class is the current class.
 	Class *Class
-
-	// Offset is the stack offset of `this` in the current method.
-	Offset int
 }
 
 // NullExpr is an expression of the form `null`.
@@ -446,9 +436,6 @@ type UnitExpr struct {
 type NameExpr struct {
 	// Name is the identifier.
 	Name *Ident
-
-	// This is the stack offset of `this` in the current method.
-	This int
 }
 
 // StringExpr is an expression of the form `"string"` or `"""raw string"""`.

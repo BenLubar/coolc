@@ -8,6 +8,27 @@ symbol:
 
 .set max_line_length, 0x400
 
+.globl boolean_false
+.align 2
+boolean_false:
+	.long tag_of_Boolean
+	.long size_of_Boolean
+	.long gc_tag_root
+
+.globl boolean_true
+.align 2
+boolean_true:
+	.long tag_of_Boolean
+	.long size_of_Boolean
+	.long gc_tag_root
+
+.globl unit_lit
+.align 2
+unit_lit:
+	.long tag_of_Unit
+	.long size_of_Unit
+	.long gc_tag_root
+
 .text
 
 .globl _start
@@ -460,7 +481,7 @@ String.substring:
 
 .globl String.charAt
 String.charAt:
-	enter $0, $0
+	enter $4, $0
 
 	movl 12(%ebp), %eax
 	movl 8(%ebp), %ebx
@@ -470,8 +491,7 @@ String.charAt:
 	movl $0, %edx
 	movb offset_of_String.str_field(%eax), %dl
 
-	shll $2, %edx
-	movl byte_ints(%edx), %eax
+	movl %edx, -4(%ebp)
 
 	movl 8(%ebp), %ebx
 	cmpl $0, gc_offset(%ebx)
@@ -483,6 +503,12 @@ String.charAt:
 	jle 2f
 	decl gc_offset(%ebx)
 2:
+
+	movl $(size_of_Int + 4), %eax
+	movl $tag_of_Int, %ebx
+	call gc_alloc
+	movl -4(%ebp), %ebx
+	movl %ebx, offset_of_Int.value(%eax)
 
 	leave
 	ret $8
