@@ -1,8 +1,8 @@
 package ast
 
 import (
-	"fmt"
 	"go/token"
+	"strconv"
 )
 
 // Program is a set of classes with a generated main method that is called by
@@ -94,7 +94,7 @@ func (a *Formal) Base(this int) string {
 
 // Offs implements Object.
 func (a *Formal) Offs() string {
-	return fmt.Sprintf("%d", a.Offset)
+	return strconv.Itoa(a.Offset)
 }
 
 // Stack implements Object.
@@ -135,12 +135,12 @@ type Attribute struct {
 
 // Base implements Object.
 func (a *Attribute) Base(this int) string {
-	return fmt.Sprintf("%d(%%ebp)", this)
+	return strconv.Itoa(this) + "(%ebp)"
 }
 
 // Offs implements Object.
 func (a *Attribute) Offs() string {
-	return fmt.Sprintf("offset_of_%s.%s", a.Parent.Type.Name, a.Name.Name)
+	return "offset_of_" + a.Parent.Type.Name + "." + a.Name.Name
 }
 
 // Stack implements Object.
@@ -304,7 +304,7 @@ func (e *MatchExpr) Base(this int) string {
 
 // Offs implements Object.
 func (e *MatchExpr) Offs() string {
-	return fmt.Sprintf("%d", e.Offset)
+	return strconv.Itoa(e.Offset)
 }
 
 // Stack implements Object.
@@ -394,7 +394,7 @@ func (e *VarExpr) Base(this int) string {
 
 // Offs implements Object.
 func (e *VarExpr) Offs() string {
-	return fmt.Sprintf("%d", e.Offset)
+	return strconv.Itoa(e.Offset)
 }
 
 // Stack implements Object.
