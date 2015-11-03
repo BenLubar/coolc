@@ -109,7 +109,7 @@ func (a *Formal) RawInt() bool {
 
 // Feature is a feature as defined by section 3.1 of CoolAid.
 type Feature interface {
-	semantTypes(func(*Ident), *Class)
+	semantTypes(*semCtx, *Class)
 }
 
 // Init is a block feature. It is inlined into the constructor in the order it
@@ -176,8 +176,8 @@ type Method struct {
 
 // Expr is an expression.
 type Expr interface {
-	semantTypes(func(*Ident), *Class)
-	semantIdentifiers(func(token.Pos, string), func(*Class, *Ident), func(...*Class) *Class, semantIdentifiers) *Class
+	semantTypes(*semCtx, *Class)
+	semantIdentifiers(*semCtx, semantIdentifiers) *Class
 
 	genCollectLiterals(*genCtx)
 	genCountVars(*genCtx) int
