@@ -18,6 +18,8 @@ type genCtx struct {
 	label    int
 	vars     int
 	varsUsed int
+
+	opt Options
 }
 
 func (ctx *genCtx) Printf(format string, args ...interface{}) {
@@ -67,7 +69,7 @@ func (ctx *genCtx) Slot() (int, func()) {
 	}
 }
 
-func (p *Program) CodeGen(w io.Writer) (err error) {
+func (p *Program) CodeGen(opt Options, w io.Writer) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -75,7 +77,8 @@ func (p *Program) CodeGen(w io.Writer) (err error) {
 	}()
 
 	ctx := &genCtx{
-		w: w,
+		w:   w,
+		opt: opt,
 	}
 	ctx.AddInt(0) // int_lit_0 must be 0
 	nullClassID := ctx.AddString("Null")
@@ -169,6 +172,7 @@ func (p *Program) CodeGen(w io.Writer) (err error) {
 }
 
 func (p *Program) genCollectLiterals(ctx *genCtx) {
+	p.Main.genCollectLiterals(ctx)
 	for _, c := range p.Classes {
 		c.genCollectLiterals(ctx)
 	}

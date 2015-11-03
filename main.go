@@ -19,7 +19,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	var opt ast.Options
+
 	flagOutput := flag.String("o", "", "output filename")
+	flag.IntVar(&opt.Benchmark, "benchmark", 1, "repeat the program this many times")
 
 	flag.Parse()
 
@@ -29,6 +32,10 @@ func main() {
 
 	if *flagOutput == "" {
 		*flagOutput = strings.TrimSuffix(flag.Arg(0), ".cool") + ".s"
+	}
+
+	if opt.Benchmark < 1 {
+		opt.Benchmark = 1
 	}
 
 	fset := token.NewFileSet()
@@ -61,7 +68,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if prog.Semant(fset) {
+	if prog.Semant(opt, fset) {
 		os.Exit(2)
 	}
 
@@ -72,5 +79,5 @@ func main() {
 	}
 	defer f.Close()
 
-	prog.CodeGen(f)
+	prog.CodeGen(opt, f)
 }

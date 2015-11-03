@@ -51,7 +51,7 @@ var nothingClass = &Class{
 	Features: nil,
 }
 
-func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
+func (p *Program) Semant(opt Options, fset *token.FileSet) (haveErrors bool) {
 	report := func(pos token.Pos, message string) {
 		fmt.Printf("%v: %s\n", fset.Position(pos), message)
 		haveErrors = true
@@ -246,6 +246,99 @@ func (p *Program) Semant(fset *token.FileSet) (haveErrors bool) {
 			Pos:  token.NoPos,
 			Name: "Main",
 		},
+	}
+	if opt.Benchmark != 1 {
+		p.Main = &VarExpr{
+			Name: &Ident{
+				Pos:  token.NoPos,
+				Name: "benchmark",
+			},
+			Type: &Ident{
+				Pos:   token.NoPos,
+				Name:  "Int",
+				Class: int_,
+			},
+			Init: &IntExpr{
+				Lit: &IntLit{
+					Pos:   token.NoPos,
+					Int:   0,
+					Class: int_,
+				},
+			},
+			Body: &WhileExpr{
+				Cond: &LessThanExpr{
+					Pos: token.NoPos,
+					Left: &NameExpr{
+						Name: &Ident{
+							Pos:  token.NoPos,
+							Name: "benchmark",
+						},
+					},
+					Right: &IntExpr{
+						Lit: &IntLit{
+							Pos:   token.NoPos,
+							Int:   int32(opt.Benchmark),
+							Class: int_,
+						},
+					},
+					Int: &Ident{
+						Pos:   token.NoPos,
+						Name:  "Int",
+						Class: int_,
+					},
+					Boolean: &Ident{
+						Pos:   token.NoPos,
+						Name:  "Boolean",
+						Class: boolean,
+					},
+				},
+				Body: &ChainExpr{
+					Pre: p.Main,
+					Expr: &AssignExpr{
+						Name: &Ident{
+							Pos:  token.NoPos,
+							Name: "benchmark",
+						},
+						Expr: &AddExpr{
+							Pos: token.NoPos,
+							Left: &NameExpr{
+								Name: &Ident{
+									Pos:  token.NoPos,
+									Name: "benchmark",
+								},
+							},
+							Right: &IntExpr{
+								Lit: &IntLit{
+									Pos:   token.NoPos,
+									Int:   1,
+									Class: int_,
+								},
+							},
+							Int: &Ident{
+								Pos:   token.NoPos,
+								Name:  "Int",
+								Class: int_,
+							},
+						},
+						Unit: &Ident{
+							Pos:   token.NoPos,
+							Name:  "Unit",
+							Class: unit,
+						},
+					},
+				},
+				Boolean: &Ident{
+					Pos:   token.NoPos,
+					Name:  "Boolean",
+					Class: boolean,
+				},
+				Unit: &Ident{
+					Pos:   token.NoPos,
+					Name:  "Unit",
+					Class: unit,
+				},
+			},
+		}
 	}
 	p.Main.semantIdentifiers(report, less_report, lub, nil)
 

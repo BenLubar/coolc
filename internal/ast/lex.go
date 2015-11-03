@@ -117,7 +117,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 	check(err)
 	l.offset = int(offset)
 
-	r, _, err := l.r.ReadRune()
+	r, err := l.r.ReadByte()
 	check(err)
 
 	for {
@@ -128,21 +128,21 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 		offset--
 		l.offset = int(offset)
 
-		if unicode.IsSpace(r) {
-			r, _, err = l.r.ReadRune()
+		if unicode.IsSpace(rune(r)) {
+			r, err = l.r.ReadByte()
 			check(err)
 			continue
 		}
 
 		if r == '/' {
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			switch r {
 			case '/':
 				for {
-					r, _, err = l.r.ReadRune()
+					r, err = l.r.ReadByte()
 					check(err)
 					if r == '\n' {
-						r, _, err = l.r.ReadRune()
+						r, err = l.r.ReadByte()
 						check(err)
 						break
 					}
@@ -151,23 +151,23 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 			case '*':
 				unexpected = true
 				for {
-					r, _, err = l.r.ReadRune()
+					r, err = l.r.ReadByte()
 					check(err)
 					if r == '*' {
-						r, _, err = l.r.ReadRune()
+						r, err = l.r.ReadByte()
 						check(err)
 						if r == '/' {
 							unexpected = false
-							r, _, err = l.r.ReadRune()
+							r, err = l.r.ReadByte()
 							check(err)
 							break
 						}
-						check(l.r.UnreadRune())
+						check(l.r.UnreadByte())
 					}
 				}
 				continue
 			default:
-				check(l.r.UnreadRune())
+				check(l.r.UnreadByte())
 				r = '/'
 			}
 		}
@@ -177,20 +177,20 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 
 	unexpected = true
 
-	validIdentifier := func(r rune) bool {
-		return r == '_' || unicode.IsUpper(r) || unicode.IsLower(r) || (r >= '0' && r <= '9')
+	validIdentifier := func(r byte) bool {
+		return r == '_' || unicode.IsUpper(rune(r)) || unicode.IsLower(rune(r)) || (r >= '0' && r <= '9')
 	}
 
-	var buf []rune
-	if unicode.IsUpper(r) {
+	var buf []byte
+	if unicode.IsUpper(rune(r)) {
 		buf = append(buf, r)
 		for {
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			check(err)
 			if validIdentifier(r) {
 				buf = append(buf, r)
 			} else {
-				check(l.r.UnreadRune())
+				check(l.r.UnreadByte())
 				lvalue.id = &Ident{
 					Pos:  l.file.Pos(int(offset)),
 					Name: string(buf),
@@ -199,15 +199,15 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 			}
 		}
 	}
-	if unicode.IsLower(r) {
+	if unicode.IsLower(rune(r)) {
 		buf = append(buf, r)
 		for {
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			check(err)
 			if validIdentifier(r) {
 				buf = append(buf, r)
 			} else {
-				check(l.r.UnreadRune())
+				check(l.r.UnreadByte())
 				s := string(buf)
 				if tok, ok := idTokens[s]; ok {
 					lvalue.pos = l.file.Pos(int(offset))
@@ -222,9 +222,9 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 		}
 	}
 	if r == '0' {
-		r, _, err = l.r.ReadRune()
+		r, err = l.r.ReadByte()
 		check(err)
-		check(l.r.UnreadRune())
+		check(l.r.UnreadByte())
 
 		if r >= '0' && r <= '9' {
 			return ILLEGAL
@@ -240,12 +240,12 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 		buf = append(buf, r)
 
 		for {
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			check(err)
 			if r >= '0' && r <= '9' {
 				buf = append(buf, r)
 			} else {
-				check(l.r.UnreadRune())
+				check(l.r.UnreadByte())
 				var n int64
 				n, err = strconv.ParseInt(string(buf), 10, 32)
 				check(err)
@@ -258,14 +258,14 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 		}
 	}
 	if r == '"' {
-		r, _, err = l.r.ReadRune()
+		r, err = l.r.ReadByte()
 		check(err)
 		if r == '"' {
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			check(err)
 			if r == '"' {
 				for {
-					r, _, err = l.r.ReadRune()
+					r, err = l.r.ReadByte()
 					check(err)
 					buf = append(buf, r)
 
@@ -278,7 +278,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 					}
 				}
 			}
-			check(l.r.UnreadRune())
+			check(l.r.UnreadByte())
 			lvalue.str = &StringLit{
 				Pos: l.file.Pos(int(offset)),
 				Str: "",
@@ -300,7 +300,7 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 				return STRING
 
 			case '\\':
-				r, _, err = l.r.ReadRune()
+				r, err = l.r.ReadByte()
 				check(err)
 				switch r {
 				case '0':
@@ -328,13 +328,13 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 				buf = append(buf, r)
 			}
 
-			r, _, err = l.r.ReadRune()
+			r, err = l.r.ReadByte()
 			check(err)
 		}
 	}
 	switch r {
 	case '=':
-		r, _, err = l.r.ReadRune()
+		r, err = l.r.ReadByte()
 		check(err)
 		switch r {
 		case '=':
@@ -344,18 +344,18 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 			lvalue.pos = l.file.Pos(int(offset))
 			return ARROW
 		default:
-			check(l.r.UnreadRune())
+			check(l.r.UnreadByte())
 			r = '='
 		}
 	case '<':
-		r, _, err = l.r.ReadRune()
+		r, err = l.r.ReadByte()
 		check(err)
 		switch r {
 		case '=':
 			lvalue.pos = l.file.Pos(int(offset))
 			return LE
 		default:
-			check(l.r.UnreadRune())
+			check(l.r.UnreadByte())
 			r = '<'
 		}
 	}
