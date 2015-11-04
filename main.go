@@ -79,5 +79,5 @@ func main() {
 	}
 	defer f.Close()
 
-	prog.CodeGen(opt, f)
+	prog.CodeGen(opt, fset, f)
 }

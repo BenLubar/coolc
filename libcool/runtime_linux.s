@@ -16,16 +16,32 @@ runtime_input_remaining:
 .text
 
 .globl runtime.exit
+.type runtime.exit, @function
 runtime.exit:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $1, %eax
 	movl 8(%ebp), %ebx
 	int $0x80
+	.cfi_endproc
+	.size runtime.exit, .-runtime.exit
 
 .globl runtime.output
+.type runtime.output, @function
 runtime.output:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 
@@ -38,11 +54,21 @@ runtime.output:
 	int $0x80
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size runtime.output, .-runtime.output
 
 .globl runtime.input
+.type runtime.input, @function
 runtime.input:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 1:
 	movl runtime_input_remaining, %ecx
@@ -82,8 +108,7 @@ runtime.input:
 	cld
 	rep movsb
 
-	leave
-	ret $4
+	jmp 5f
 
 2:
 	call runtime.fill_buf
@@ -99,11 +124,22 @@ runtime.input:
 	decl gc_offset(%eax)
 	movl $0, %eax
 
+5:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size runtime.input, .-runtime.input
 
+.type runtime.fill_buf, @function
 runtime.fill_buf:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $3, %eax
 	movl $0, %ebx
@@ -122,29 +158,52 @@ runtime.fill_buf:
 	addl %eax, runtime_input_remaining
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $0
+	.cfi_endproc
+	.size runtime.fill_buf, .-runtime.fill_buf
 
 .globl runtime.heap_get
+.type runtime.heap_get, @function
 runtime.heap_get:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $45, %eax
 	movl $0, %ebx
 	int $0x80
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $0
+	.cfi_endproc
+	.size runtime.heap_get, .-runtime.heap_get
 
 .globl runtime.heap_set
+.type runtime.heap_set, @function
 runtime.heap_set:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $45, %eax
 	movl 8(%ebp), %ebx
 	int $0x80
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size runtime.heap_set, .-runtime.heap_set
 
 .data
 
@@ -161,8 +220,15 @@ case_panic_after:
 .text
 
 .globl runtime.case_panic
+.type runtime.case_panic, @function
 runtime.case_panic:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl class_names(%eax), %eax
 	push %eax
@@ -185,6 +251,9 @@ runtime.case_panic:
 	movl $1, %ebx
 	int $0x80
 
+	.cfi_endproc
+	.size runtime.case_panic, .-runtime.case_panic
+
 .data
 
 .align 2
@@ -195,8 +264,15 @@ null_panic_before:
 .text
 
 .globl runtime.null_panic
+.type runtime.null_panic, @function
 runtime.null_panic:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $4, %eax
 	movl $1, %ebx
@@ -208,6 +284,9 @@ runtime.null_panic:
 	movl $1, %ebx
 	int $0x80
 
+	.cfi_endproc
+	.size runtime.null_panic, .-runtime.null_panic
+
 .data
 
 .align 2
@@ -218,8 +297,15 @@ bounds_panic_before:
 .text
 
 .globl runtime.bounds_panic
+.type runtime.bounds_panic, @function
 runtime.bounds_panic:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl $4, %eax
 	movl $1, %ebx
@@ -230,3 +316,6 @@ runtime.bounds_panic:
 	movl $1, %eax
 	movl $1, %ebx
 	int $0x80
+
+	.cfi_endproc
+	.size runtime.bounds_panic, .-runtime.bounds_panic

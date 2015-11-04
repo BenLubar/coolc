@@ -39,8 +39,15 @@ _start:
 	call runtime.exit
 
 .globl Any.toString
+.type Any.toString, @function
 Any.toString:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %ebx
 	movl tag_offset(%ebx), %eax
@@ -53,11 +60,21 @@ Any.toString:
 1:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size Any.toString, .-Any.toString
 
 .globl Any.equals
+.type Any.equals, @function
 Any.equals:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	movl 12(%ebp), %ebx
@@ -76,18 +93,28 @@ Any.equals:
 
 	leal boolean_true, %eax
 
-	leave
-	ret $8
+	jmp 2f
 
 1:
 	leal boolean_false, %eax
 
+2:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size Any.equals, .-Any.equals
 
 .globl IO.abort
+.type IO.abort, @function
 IO.abort:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	push %eax
@@ -95,10 +122,19 @@ IO.abort:
 
 	push $1
 	call runtime.exit
+	.cfi_endproc
+	.size IO.abort, .-IO.abort
 
 .globl IO.out
+.type IO.out, @function
 IO.out:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -114,11 +150,21 @@ IO.out:
 	movl 12(%ebp), %eax
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size IO.out, .-IO.out
 
 .globl IO.in
+.type IO.in, @function
 IO.in:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	movl $(size_of_Int + 4), %eax
 	movl $tag_of_Int, %ebx
@@ -145,11 +191,21 @@ IO.in:
 1:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size IO.in, .-IO.in
 
 .globl IO.symbol
+.type IO.symbol, @function
 IO.symbol:
-	enter $12, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $12, %esp
 
 	// there's no state in IO, so release `this`
 	movl 12(%ebp), %eax
@@ -235,8 +291,7 @@ IO.symbol:
 	movl -4(%ebp), %ebx
 	movl %eax, (%ebx)
 
-	leave
-	ret $8
+	jmp 6f
 
 4:
 	// let the string be garbage collected
@@ -248,12 +303,23 @@ IO.symbol:
 	// grab the symbol we found
 	movl -8(%ebp), %eax
 
+6:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size IO.symbol, .-IO.symbol
 
 .globl IO.symbol_name
+.type IO.symbol_name, @function
 IO.symbol_name:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -261,7 +327,10 @@ IO.symbol_name:
 	movl offset_of_Symbol.name(%eax), %eax
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size IO.symbol_name, .-IO.symbol_name
 
 .data
 
@@ -283,8 +352,15 @@ string_lit_min_int_start:
 .text
 
 .globl Int.toString
+.type Int.toString, @function
 Int.toString:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	movl 8(%ebp), %eax
 	cmpl $0, gc_offset(%eax)
@@ -325,8 +401,7 @@ Int.toString:
 	movb $0x30, (%ecx)
 	movl $1, offset_of_Int.value(%edx)
 
-	leave
-	ret $4
+	jmp 15f
 
 3:
 	movb $0x2D, (%ecx)
@@ -451,12 +526,23 @@ Int.toString:
 
 	movl -4(%ebp), %eax
 
+15:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $4
+	.cfi_endproc
+	.size Int.toString, .-Int.toString
 
 .globl Int.equals
+.type Int.equals, @function
 Int.equals:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -481,18 +567,28 @@ Int.equals:
 
 	leal boolean_true, %eax
 
-	leave
-	ret $8
+	jmp 4f
 
 1:
 	leal boolean_false, %eax
 
+4:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size Int.equals, .-Int.equals
 
 .globl String.equals
+.type String.equals, @function
 String.equals:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -533,11 +629,21 @@ String.equals:
 	decl gc_offset(%ebx)
 4:
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size String.equals, .-String.equals
 
 .globl String.concat
+.type String.concat, @function
 String.concat:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	movl 8(%ebp), %eax
 	test %eax, %eax
@@ -595,9 +701,14 @@ String.concat:
 2:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size String.concat, .-String.concat
 
+.type String._check_bounds, @function
 String._check_bounds:
+	.cfi_startproc
 	movl offset_of_String.length(%eax), %ecx
 	movl offset_of_Int.value(%ecx), %ecx
 	movl offset_of_Int.value(%ebx), %edx
@@ -606,10 +717,19 @@ String._check_bounds:
 	jbe runtime.bounds_panic
 
 	ret
+	.cfi_endproc
+	.size String._check_bounds, .-String._check_bounds
 
 .globl String.substring
+.type String.substring, @function
 String.substring:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	movl 16(%ebp), %eax
 	movl 12(%ebp), %ebx
@@ -667,11 +787,21 @@ String.substring:
 3:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $12
+	.cfi_endproc
+	.size String.substring, .-String.substring
 
 .globl String.charAt
+.type String.charAt, @function
 String.charAt:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	movl 12(%ebp), %eax
 	movl 8(%ebp), %ebx
@@ -701,9 +831,14 @@ String.charAt:
 	movl %ebx, offset_of_Int.value(%eax)
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size String.charAt, .-String.charAt
 
+.type ArrayAny._check_bounds, @function
 ArrayAny._check_bounds:
+	.cfi_startproc
 	movl offset_of_ArrayAny.length(%eax), %ecx
 	movl offset_of_Int.value(%ecx), %ecx
 	movl offset_of_Int.value(%ebx), %edx
@@ -716,16 +851,27 @@ ArrayAny._check_bounds:
 	leal offset_of_ArrayAny.array_field(%eax), %eax
 
 	ret
+	.cfi_endproc
+	.size ArrayAny._check_bounds, .-ArrayAny._check_bounds
 
 .globl ArrayAny.get
+.type ArrayAny.get, @function
 ArrayAny.get:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 12(%ebp), %eax
 	movl 8(%ebp), %ebx
 	call ArrayAny._check_bounds
 
 	movl (%eax), %eax
+	test %eax, %eax
+	jz 1f
 	cmpl $0, gc_offset(%eax)
 	jl 1f
 	incl gc_offset(%eax)
@@ -742,11 +888,21 @@ ArrayAny.get:
 3:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $8
+	.cfi_endproc
+	.size ArrayAny.get, .-ArrayAny.get
 
 .globl ArrayAny.set
+.type ArrayAny.set, @function
 ArrayAny.set:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	movl 16(%ebp), %eax
 	movl 12(%ebp), %ebx
@@ -781,11 +937,21 @@ ArrayAny.set:
 4:
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $12
+	.cfi_endproc
+	.size ArrayAny.set, .-ArrayAny.set
 
 .globl ArrayAny.ArrayAny
+.type ArrayAny.ArrayAny, @function
 ArrayAny.ArrayAny:
-	enter $0, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
 
 	// top 3 bits of length must be unset
 	movl 8(%ebp), %eax
@@ -816,11 +982,8 @@ ArrayAny.ArrayAny:
 	cmpl $0, gc_offset(%ebx)
 	jle 3f
 	decl gc_offset(%ebx)
-3:
 
-	leave
-	ret $8
-
+	jmp 3f
 1:
 	// let the old one be garbage collected
 	movl 12(%ebp), %ecx
@@ -834,3 +997,10 @@ ArrayAny.ArrayAny:
 	call gc_alloc
 
 	jmp 2b
+3:
+
+	leave
+	.cfi_def_cfa esp, 4
+	ret $8
+	.cfi_endproc
+	.size ArrayAny.ArrayAny, .-ArrayAny.ArrayAny

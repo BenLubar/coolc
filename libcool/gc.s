@@ -28,24 +28,43 @@ gc_heap_end:
 .text
 
 .globl gc_init
+.type gc_init, @function
 gc_init:
+	.cfi_startproc
 	call runtime.heap_get
 	movl %eax, gc_heap_start
 	movl %eax, gc_heap_end
 	call gc_increase_heap
+	movl gc_heap_start, %eax
+	movl $0, tag_offset(%eax)
 	ret $0
+	.cfi_endproc
+	.size gc_init, .-gc_init
 
+.type gc_increase_heap, @function
 gc_increase_heap:
+	.cfi_startproc
 	movl gc_heap_end, %eax
 	addl $gc_increase_heap_size, %eax
 	push %eax
+	.cfi_adjust_cfa_offset -4
 	call runtime.heap_set
+	.cfi_adjust_cfa_offset 4
 	movl %eax, gc_heap_end
 	ret $0
+	.cfi_endproc
+	.size gc_increase_heap, .-gc_increase_heap
 
 .globl gc_alloc
+.type gc_alloc, @function
 gc_alloc:
-	enter $8, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $8, %esp
 
 	movl %eax, -4(%ebp)
 	movl %ebx, -8(%ebp)
@@ -73,11 +92,16 @@ gc_alloc:
 2:
 	// did we run out of space?
 	cmpl %eax, %edx
-	jle 3f
+	jg 3f
 
+	// we ran out of space. make more space and start over.
+	call gc_increase_heap
+	jmp 1b
+
+3:
 	// are we in clean memory?
 	cmpl $0, tag_offset(%eax)
-	je 4f
+	je 8f
 
 	// if we're not looking at garbage, skip to the next one.
 	cmpl $tag_of_garbage, tag_offset(%eax)
@@ -134,6 +158,11 @@ gc_alloc:
 	addl $data_offset, %eax
 	jmp 2b
 
+8:
+	leal data_offset(%eax), %edx
+	addl %ecx, %edx
+	movl $0, tag_offset(%edx)
+
 4:
 	// we found enough space! set the meta-fields, then zero out the rest.
 	movl -4(%ebp), %ebx
@@ -151,15 +180,20 @@ gc_alloc:
 	//call gc_check
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $0
+	.cfi_endproc
+	.size gc_alloc, .-gc_alloc
 
-3:
-	// we ran out of space. make more space and start over.
-	call gc_increase_heap
-	jmp 1b
-
+.type gc_collect, @function
 gc_collect:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 
 	//movl $0, %eax
 	//call gc_check
@@ -264,11 +298,21 @@ gc_collect:
 	//call gc_check
 
 	leave
+	.cfi_def_cfa esp, 4
 	ret $0
+	.cfi_endproc
+	.size gc_collect, .-gc_collect
 
 .globl gc_check
+.type gc_check, @function
 gc_check:
-	enter $4, $0
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $4, %esp
 	movl %eax, -4(%ebp)
 
 	movl gc_heap_start, %eax
@@ -395,4 +439,7 @@ gc_check:
 18:
 	movl -4(%ebp), %eax
 	leave
+	.cfi_def_cfa esp, 4
 	ret $0
+	.cfi_endproc
+	.size gc_check, .-gc_check

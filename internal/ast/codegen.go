@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"go/token"
 	"io"
 	"strconv"
 )
@@ -18,6 +19,8 @@ type genCtx struct {
 	label    int
 	vars     int
 	varsUsed int
+
+	fset *token.FileSet
 
 	opt Options
 }
@@ -69,7 +72,7 @@ func (ctx *genCtx) Slot() (int, func()) {
 	}
 }
 
-func (p *Program) CodeGen(opt Options, w io.Writer) (err error) {
+func (p *Program) CodeGen(opt Options, fset *token.FileSet, w io.Writer) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -77,8 +80,9 @@ func (p *Program) CodeGen(opt Options, w io.Writer) (err error) {
 	}()
 
 	ctx := &genCtx{
-		w:   w,
-		opt: opt,
+		w:    w,
+		fset: fset,
+		opt:  opt,
 	}
 	ctx.AddInt(0) // int_lit_0 must be 0
 	nullClassID := ctx.AddString("Null")
@@ -208,10 +212,18 @@ func (c *Class) genConstants(ctx *genCtx) {
 func genMethod(ctx *genCtx, name string, args int, body Expr, hasArgs bool) {
 	ctx.Printf("\n")
 	ctx.Printf(".globl %s\n", name)
+	ctx.Printf(".type %s, @function\n", name)
 	ctx.Printf("%s:\n", name)
+	ctx.Printf("\t.cfi_startproc\n")
+
 	ctx.this = args*4 + 8
 	ctx.vars = body.genCountVars(ctx)
-	ctx.Printf("\tenter $%d, $0\n", ctx.vars*4)
+	ctx.Printf("\tpush %%ebp\n")
+	ctx.Printf("\t.cfi_def_cfa_offset 8\n")
+	ctx.Printf("\t.cfi_offset ebp, -8\n")
+	ctx.Printf("\tmovl %%esp, %%ebp\n")
+	ctx.Printf("\t.cfi_def_cfa_register ebp\n")
+	ctx.Printf("\tsubl $%d, %%esp\n", ctx.vars*4)
 
 	//ctx.Printf("\tmovl $0, %%eax\n")
 	//ctx.Printf("\tcall gc_check\n")
@@ -229,7 +241,10 @@ func genMethod(ctx *genCtx, name string, args int, body Expr, hasArgs bool) {
 	//ctx.Printf("\tcall gc_check\n")
 
 	ctx.Printf("\tleave\n")
+	ctx.Printf("\t.cfi_def_cfa esp, 4\n")
 	ctx.Printf("\tret $%d\n", args*4+4)
+	ctx.Printf("\t.cfi_endproc\n")
+	ctx.Printf("\t.size %s, .-%s\n", name, name)
 }
 
 func genRef(ctx *genCtx, reg string) {
@@ -290,6 +305,9 @@ func (c *Class) genCode(ctx *genCtx) {
 			if _, ok := m.Body.(*NativeExpr); ok {
 				continue
 			}
+
+			ctx.Printf("\n")
+			ctx.Printf(".file %q\n", ctx.fset.File(m.Name.Pos).Name())
 
 			for i, a := range m.Args {
 				a.Offset = (len(m.Args)-i)*4 + 4
