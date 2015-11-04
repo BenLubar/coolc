@@ -415,6 +415,10 @@ func (c *Class) semantMakeConstructor(ctx *semCtx) {
 			}
 
 		case *Attribute:
+			if c.Type.Name == "String" && f.Name.Name == "str_field" {
+				continue
+			}
+
 			constructor = &ChainExpr{
 				Pre: &AssignExpr{
 					Name: f.Name,
@@ -432,7 +436,7 @@ func (c *Class) semantMakeConstructor(ctx *semCtx) {
 	}
 
 	switch c.Type.Name {
-	case "Int", "Boolean", "String", "Unit", "Symbol":
+	case "Int", "Boolean", "Unit", "Symbol":
 		return
 
 	case "ArrayAny":
