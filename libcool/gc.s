@@ -193,104 +193,122 @@ gc_collect:
 	.cfi_offset ebp, -8
 	movl %esp, %ebp
 	.cfi_def_cfa_register ebp
-	subl $4, %esp
+	subl $12, %esp
 
 	//movl $0, %eax
 	//call gc_check
 
 1:
-	// while we're finding new references:
-	movl $0, %ebx
-	movl gc_heap_start, %eax
+	// starting state: all objects on the heap are one of:
+	// - gc_tag_garbage (garbage)
+	// - gc_tag_root (a garbage collection root)
+	// - [a positive integer] (referenced on the stack)
+	// - gc_tag_none (not referenced on the stack)
+	//
+	// The first is not touched, the second and third make up the starting
+	// gray set, and the last is the starting white set. We now make all
+	// the gray objects black by making white objects they point to gray.
+	//
+	// Objects not on the heap are always roots and never point to non-root
+	// objects, so they do not need to be touched.
 
+	movl gc_heap_start, %eax
 2:
-	// mark references
-	cmpl $0, tag_offset(%eax)
-	je 8f
-	cmpl $gc_tag_garbage, gc_offset(%eax)
-	je 7f
-	cmpl $gc_tag_none, gc_offset(%eax)
-	je 7f
-	movl tag_offset(%eax), %ecx
+	// check the tag
+	movl tag_offset(%eax), %ebx
+	cmpl $0, %ebx
+	je 6f
+	jl 5f
+
+	// skip anything that isn't a root or on the stack.
+	movl gc_offset(%eax), %ecx
+	cmpl $gc_tag_live, %ecx
+	je 5f
+	cmpl $gc_tag_none, %ecx
+	je 5f
+
+	// get the number of pointers
+	movl %ebx, %ecx
 	shll $2, %ecx
 	movl gc_sizes(%ecx), %ecx
-	cmpl $tag_of_ArrayAny, tag_offset(%eax)
-	jne 3f
-	movl offset_of_ArrayAny.length(%eax), %edx
-	addl offset_of_Int.value(%edx), %ecx
+	leal data_offset(%eax), %edx
 
+	// save eax
+	movl %eax, -4(%ebp)
+
+	// ArrayAny is a special case with more pointers
+	cmpl $tag_of_ArrayAny, %ebx
+	jne 3f
+	movl offset_of_ArrayAny.length(%eax), %ebx
+	test %ebx, %ebx
+	jz 3f
+	addl offset_of_Int.value(%ebx), %ecx
 3:
-	leal (data_offset - 4)(%eax), %edx
-	jmp 6f
+	// for each pointer...
+	test %ecx, %ecx
+	jz 4f
+
+	// save ecx and edx
+	movl %ecx, -8(%ebp)
+	movl %edx, -12(%ebp)
+
+	// mark!
+	push (%edx)
+	call gc_mark
+
+	// restore ecx and edx
+	movl -8(%ebp), %ecx
+	movl -12(%ebp), %edx
+
+	// go to the next pointer
+	decl %ecx
+	addl $4, %edx
+	jmp 3b
 
 4:
-	cmpl $0, (%edx)
-	je 6f
-	movl %edx, -4(%ebp)
-	movl (%edx), %edx
-	cmpl $gc_tag_none, gc_offset(%edx)
-	jne 5f
-	movl $gc_tag_live, gc_offset(%edx)
-	movl $1, %ebx
+	// restore eax
+	movl -4(%ebp), %eax
+
 5:
-	movl -4(%ebp), %edx
-
-6:
-	addl $4, %edx
-	test %ecx, %ecx
-	jz 7f
-	subl $1, %ecx
-	jmp 4b
-
-7:
+	// move to the next object
 	addl size_offset(%eax), %eax
-	leal data_offset(%eax), %eax
+	addl $data_offset, %eax
 	jmp 2b
 
-8:
-	test %ebx, %ebx
-	jnz 1b
-
-	// now we have:
-	// gc_tag_garbage, gc_tag_root -> unchanged, don't touch
-	// gc_tag_live -> visible from some root, don't touch
-	// gc_tag_none -> garbage, free
-	// > gc_tag_none -> on a stack somewhere, don't touch
+6:
+	// sweep phase: a single pass through the heap. anything unmarked is
+	// marked as garbage. anything marked as live is unmarked. if anything
+	// was marked as garbage, start over from the beginning.
 
 	movl gc_heap_start, %eax
-
-9:
+	movl $0, %ebx
+7:
 	cmpl $0, tag_offset(%eax)
-	je 11f
+	je 10f
+
+	// collect garbage
 	cmpl $gc_tag_none, gc_offset(%eax)
-	jne 10f
-	movl $1, %ebx
-	movl $gc_tag_garbage, gc_offset(%eax)
+	jne 8f
+
 	movl $tag_of_garbage, tag_offset(%eax)
+	movl $gc_tag_garbage, gc_offset(%eax)
+	movl $1, %ebx
 
-10:
-	addl size_offset(%eax), %eax
-	leal data_offset(%eax), %eax
-	jmp 9b
-
-11:
-	movl gc_heap_start, %eax
-
-12:
-	// clear GC flags: live->none
-	cmpl $0, tag_offset(%eax)
-	je 14f
+	jmp 9f
+8:
+	// unmark live
 	cmpl $gc_tag_live, gc_offset(%eax)
-	jne 13f
+	jne 9f
+
 	movl $gc_tag_none, gc_offset(%eax)
 
-13:
+9:
+	// move to the next object
 	addl size_offset(%eax), %eax
-	leal data_offset(%eax), %eax
-	jmp 12b
+	addl $data_offset, %eax
+	jmp 7b
 
-14:
-	// if we freed anything, go back to the beginning.
+10:
 	test %ebx, %ebx
 	jnz 1b
 
@@ -302,6 +320,75 @@ gc_collect:
 	ret $0
 	.cfi_endproc
 	.size gc_collect, .-gc_collect
+
+.type gc_mark, @function
+gc_mark:
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $8, %esp
+
+	// grab the argument
+	movl 8(%ebp), %eax
+
+	// don't touch it if it's null
+	test %eax, %eax
+	jz 2f
+
+	// don't touch it if it's not a white object
+	cmpl $gc_tag_none, gc_offset(%eax)
+	jne 2f
+
+	// mark it live. we consider it gray until this function returns,
+	// then it is black.
+	movl $gc_tag_live, gc_offset(%eax)
+
+	// get the number of pointers
+	movl tag_offset(%eax), %ebx
+	movl %ebx, %ecx
+	shll $2, %ecx
+	movl gc_sizes(%ecx), %ecx
+	leal data_offset(%eax), %edx
+
+	// ArrayAny is a special case with more pointers
+	cmpl $tag_of_ArrayAny, %ebx
+	jne 1f
+	movl offset_of_ArrayAny.length(%eax), %ebx
+	test %ebx, %ebx
+	jz 1f
+	addl offset_of_Int.value(%ebx), %ecx
+1:
+	// for each pointer...
+	test %ecx, %ecx
+	jz 2f
+
+	// save ecx and edx
+	movl %ecx, -4(%ebp)
+	movl %edx, -8(%ebp)
+
+	// mark!
+	push (%edx)
+	call gc_mark
+
+	// restore ecx and edx
+	movl -4(%ebp), %ecx
+	movl -8(%ebp), %edx
+
+	// go to the next pointer
+	decl %ecx
+	addl $4, %edx
+	jmp 1b
+
+2:
+
+	leave
+	.cfi_def_cfa esp, 4
+	ret $4
+	.cfi_endproc
+	.size gc_mark, .-gc_mark
 
 .globl gc_check
 .type gc_check, @function
