@@ -64,13 +64,7 @@ gc_alloc:
 	.cfi_offset ebp, -8
 	movl %esp, %ebp
 	.cfi_def_cfa_register ebp
-	subl $8, %esp
-
-	movl %eax, -4(%ebp)
-	movl %ebx, -8(%ebp)
-	call gc_collect
-	movl -4(%ebp), %eax
-	movl -8(%ebp), %ebx
+	subl $12, %esp
 
 	// make sure it's aligned
 	addl $3, %eax
@@ -78,6 +72,7 @@ gc_alloc:
 
 	movl %eax, %ecx
 	movl %ebx, -4(%ebp)
+	movl $0, -12(%ebp)
 
 1:
 	// eax = current pointer
@@ -94,6 +89,19 @@ gc_alloc:
 	cmpl %eax, %edx
 	jg 3f
 
+	// only collect garbage once. otherwise, increase the size of the heap.
+	cmpl $0, -12(%ebp)
+	jne 9f
+
+	movl $1, -12(%ebp)
+
+	// collect garbage
+	movl %ecx, -8(%ebp)
+	call gc_collect
+	movl -8(%ebp), %ecx
+	jmp 1b
+
+9:
 	// we ran out of space. make more space and start over.
 	call gc_increase_heap
 	jmp 1b
