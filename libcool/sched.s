@@ -92,6 +92,7 @@ runtime.morestack:
 
 	// copy arguments
 	movl -4(%ebp), %ecx
+	leal 12(%ebp), %esi
 	leal -4(%ebx), %edi
 	std
 	rep movsd
@@ -422,6 +423,16 @@ Channel.send:
 	movl $0, coroutine_deadlock
 	movl 8(%ebp), %eax
 	movl %eax, offset_of_Channel.channel_field(%ebx)
+3:
+	movl 12(%ebp), %ebx
+	movl 8(%ebp), %eax
+	cmpl %eax, offset_of_Channel.channel_field(%ebx)
+	jne 4f
+	call runtime.sched
+	jmp 3b
+4:
+	movl $0, coroutine_deadlock
+	movl $unit_lit, %eax
 
 	leave
 	.cfi_def_cfa esp, 4
@@ -477,9 +488,9 @@ runtime.gc_collect:
 	jmp gc_collect
 
 1:
-	subl $4, %eax
-	movl %esp, (%eax)
+	movl %esp, %ebx
 	movl %eax, %esp
+	push %ebx
 	call gc_collect
 	pop %esp
 	ret
