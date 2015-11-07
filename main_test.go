@@ -17,7 +17,7 @@ func init() {
 		panic(err)
 	}
 
-	mk := exec.Command("make", "libcool.a")
+	mk := exec.Command("make", "libcool.a", "libcoolsched.a")
 	mk.Dir = "libcool"
 	if output, err := mk.CombinedOutput(); err != nil {
 		fmt.Println(string(output))
@@ -155,3 +155,104 @@ func BenchmarkGood0000(b *testing.B) { benchmarkGood(b, filepath.Join("testdata"
 func BenchmarkGood0001(b *testing.B) { benchmarkGood(b, filepath.Join("testdata", "good0001")) }
 func BenchmarkGood0002(b *testing.B) { benchmarkGood(b, filepath.Join("testdata", "good0002")) }
 func BenchmarkGood0003(b *testing.B) { benchmarkGood(b, filepath.Join("testdata", "good0003")) }
+
+func testCoroutine(t *testing.T, prefix string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expect, err := ioutil.ReadFile(prefix + ".expected")
+	if err != nil {
+		t.Errorf("error reading %q: %v", prefix+".expected", err)
+		return
+	}
+
+	if output, err := exec.Command(filepath.Join(cwd, "coolc"), "-coroutine", "-o", prefix+".s", prefix+".cool").CombinedOutput(); err != nil {
+		t.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	if output, err := exec.Command("as", "-32", "-g", "--fatal-warnings", "-o", prefix+".o", prefix+".s").CombinedOutput(); err != nil {
+		t.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	// use .exe regardless of platform to make .gitignore easier
+	if output, err := exec.Command("ld", "-melf_i386", "-o", prefix+".exe", "--start-group", filepath.Join("testdata", "libcoolsched.a"), prefix+".o").CombinedOutput(); err != nil {
+		t.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	out, err := exec.Command(prefix + ".exe").CombinedOutput()
+	if err != nil {
+		t.Errorf("error running %q: %v", prefix, err)
+	}
+
+	if !bytes.Equal(expect, out) {
+		t.Errorf("for %q:\nExpected output:\n%s\nActual output:\n%s", prefix+".cool", expect, out)
+	}
+}
+
+func benchmarkCoroutine(b *testing.B, prefix string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	if output, err := exec.Command(filepath.Join(cwd, "coolc"), "-o", prefix+".s", "-coroutine", "-benchmark", strconv.Itoa(b.N), prefix+".cool").CombinedOutput(); err != nil {
+		b.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	if output, err := exec.Command("as", "-32", "-g", "--fatal-warnings", "-o", prefix+".o", prefix+".s").CombinedOutput(); err != nil {
+		b.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	if output, err := exec.Command("ld", "-melf_i386", "-o", prefix+".exe", "--start-group", filepath.Join("testdata", "libcoolsched.a"), prefix+".o").CombinedOutput(); err != nil {
+		b.Errorf("unexpected compiler error for %q: %v\n%s", prefix+".cool", err, output)
+		return
+	}
+
+	b.ResetTimer()
+
+	if err := exec.Command(prefix + ".exe").Run(); err != nil {
+		b.Errorf("error running %q: %v", prefix, err)
+	}
+}
+
+func TestCoroutine(t *testing.T) {
+	const expected = 1
+
+	cases, err := filepath.Glob(filepath.Join("testdata", "coroutine????.expected"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(cases) != expected {
+		t.Errorf("expected %d cases but there are %d", expected, len(cases))
+	}
+}
+
+func TestCoroutineGood0000(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0000")) }
+func TestCoroutineGood0001(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0001")) }
+func TestCoroutineGood0002(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0002")) }
+func TestCoroutineGood0003(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0003")) }
+func TestCoroutine0000(t *testing.T)     { testCoroutine(t, filepath.Join("testdata", "coroutine0000")) }
+
+func BenchmarkCoroutineGood0000(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "good0000"))
+}
+func BenchmarkCoroutineGood0001(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "good0001"))
+}
+func BenchmarkCoroutineGood0002(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "good0002"))
+}
+func BenchmarkCoroutineGood0003(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "good0003"))
+}
+func BenchmarkCoroutine0000(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "coroutine0000"))
+}

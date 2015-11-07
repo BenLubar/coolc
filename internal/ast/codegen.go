@@ -166,7 +166,7 @@ func (p *Program) CodeGen(opt Options, fset *token.FileSet, w io.Writer) (err er
 	ctx.Printf("\n")
 	ctx.Printf(".text\n")
 
-	genMethod(ctx, "main", 0, p.Main, false)
+	genMethod(ctx, "main", -1, p.Main)
 
 	for _, c := range p.Ordered {
 		c.genCode(ctx)
@@ -209,7 +209,7 @@ func (c *Class) genConstants(ctx *genCtx) {
 	ctx.Printf(".set size_of_%s, %d\n", c.Type.Name, c.Size)
 }
 
-func genMethod(ctx *genCtx, name string, args int, body Expr, hasArgs bool) {
+func genMethod(ctx *genCtx, name string, args int, body Expr) {
 	ctx.Printf("\n")
 	ctx.Printf(".globl %s\n", name)
 	ctx.Printf(".type %s, @function\n", name)
@@ -218,6 +218,11 @@ func genMethod(ctx *genCtx, name string, args int, body Expr, hasArgs bool) {
 
 	ctx.this = args*4 + 8
 	ctx.vars = body.genCountVars(ctx)
+	if ctx.opt.Coroutine {
+		ctx.Printf("\tmovl $%d, %%eax\n", (2+ctx.vars+body.genCountStack(ctx))*4)
+		ctx.Printf("\tmovl $%d, %%ebx\n", args+1)
+		ctx.Printf("\tcall runtime.morestack\n")
+	}
 	ctx.Printf("\tpush %%ebp\n")
 	ctx.Printf("\t.cfi_def_cfa_offset 8\n")
 	ctx.Printf("\t.cfi_offset ebp, -8\n")
@@ -231,11 +236,9 @@ func genMethod(ctx *genCtx, name string, args int, body Expr, hasArgs bool) {
 	ctx.label = 0
 	ctx.varsUsed = 0
 	body.genCode(ctx)
-	if hasArgs {
-		for i := 0; i <= args; i++ {
-			ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", i*4+8)
-			genGC(ctx, "%ebx")
-		}
+	for i := 0; i <= args; i++ {
+		ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", i*4+8)
+		genGC(ctx, "%ebx")
 	}
 
 	//ctx.Printf("\tcall gc_check\n")
@@ -306,19 +309,28 @@ func (c *Class) genCode(ctx *genCtx) {
 				continue
 			}
 
+			var name string
+			if file := ctx.fset.File(m.Name.Pos); file != nil {
+				name = file.Name()
+			}
+
 			ctx.Printf("\n")
-			ctx.Printf(".file %q\n", ctx.fset.File(m.Name.Pos).Name())
+			ctx.Printf(".file %q\n", name)
 
 			for i, a := range m.Args {
 				a.Offset = (len(m.Args)-i)*4 + 4
 			}
-			genMethod(ctx, c.Type.Name+"."+m.Name.Name, len(m.Args), m.Body, true)
+			genMethod(ctx, c.Type.Name+"."+m.Name.Name, len(m.Args), m.Body)
 		}
 	}
 }
 
 func (e *NotExpr) genCollectLiterals(ctx *genCtx) {
 	e.Expr.genCollectLiterals(ctx)
+}
+
+func (e *NotExpr) genCountStack(ctx *genCtx) int {
+	return e.Expr.genCountStack(ctx)
 }
 
 func (e *NotExpr) genCountVars(ctx *genCtx) int {
@@ -346,6 +358,10 @@ func (e *NotExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
 
 func (e *NegativeExpr) genCollectLiterals(ctx *genCtx) {
 	e.Expr.genCollectLiterals(ctx)
+}
+
+func (e *NegativeExpr) genCountStack(ctx *genCtx) int {
+	return e.Expr.genCountStack(ctx)
 }
 
 func (e *NegativeExpr) genCountVars(ctx *genCtx) int {
@@ -382,6 +398,17 @@ func (e *IfExpr) genCollectLiterals(ctx *genCtx) {
 	e.Cond.genCollectLiterals(ctx)
 	e.Then.genCollectLiterals(ctx)
 	e.Else.genCollectLiterals(ctx)
+}
+
+func (e *IfExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Cond.genCountStack(ctx)
+	if s := e.Then.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	if s := e.Else.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
 }
 
 func (e *IfExpr) genCountVars(ctx *genCtx) int {
@@ -447,6 +474,14 @@ func (e *WhileExpr) genCollectLiterals(ctx *genCtx) {
 	e.Body.genCollectLiterals(ctx)
 }
 
+func (e *WhileExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Cond.genCountStack(ctx)
+	if s := e.Body.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *WhileExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Cond.genCountVars(ctx)
 	if v := e.Body.genCountVars(ctx); v > vars {
@@ -476,6 +511,14 @@ func (e *WhileExpr) genCodeUnused(ctx *genCtx) {
 func (e *LessOrEqualExpr) genCollectLiterals(ctx *genCtx) {
 	e.Left.genCollectLiterals(ctx)
 	e.Right.genCollectLiterals(ctx)
+}
+
+func (e *LessOrEqualExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
 }
 
 func (e *LessOrEqualExpr) genCountVars(ctx *genCtx) int {
@@ -515,6 +558,14 @@ func (e *LessOrEqualExpr) genCodeJump(ctx *genCtx, l0, l1 string) {
 func (e *LessThanExpr) genCollectLiterals(ctx *genCtx) {
 	e.Left.genCollectLiterals(ctx)
 	e.Right.genCollectLiterals(ctx)
+}
+
+func (e *LessThanExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
 }
 
 func (e *LessThanExpr) genCountVars(ctx *genCtx) int {
@@ -575,6 +626,14 @@ func (e *MultiplyExpr) genCollectLiterals(ctx *genCtx) {
 	e.Right.genCollectLiterals(ctx)
 }
 
+func (e *MultiplyExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *MultiplyExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Left.genCountVars(ctx)
 	if v := 1 + e.Right.genCountVars(ctx); v > vars {
@@ -600,6 +659,14 @@ func (e *MultiplyExpr) genCodeRawInt(ctx *genCtx) {
 func (e *DivideExpr) genCollectLiterals(ctx *genCtx) {
 	e.Left.genCollectLiterals(ctx)
 	e.Right.genCollectLiterals(ctx)
+}
+
+func (e *DivideExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
 }
 
 func (e *DivideExpr) genCountVars(ctx *genCtx) int {
@@ -631,6 +698,14 @@ func (e *AddExpr) genCollectLiterals(ctx *genCtx) {
 	e.Right.genCollectLiterals(ctx)
 }
 
+func (e *AddExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *AddExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Left.genCountVars(ctx)
 	if v := 1 + e.Right.genCountVars(ctx); v > vars {
@@ -658,6 +733,14 @@ func (e *SubtractExpr) genCollectLiterals(ctx *genCtx) {
 	e.Right.genCollectLiterals(ctx)
 }
 
+func (e *SubtractExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	if s := e.Right.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *SubtractExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Left.genCountVars(ctx)
 	if v := 1 + e.Right.genCountVars(ctx); v > vars {
@@ -683,8 +766,18 @@ func (e *SubtractExpr) genCodeRawInt(ctx *genCtx) {
 func (e *MatchExpr) genCollectLiterals(ctx *genCtx) {
 	e.Left.genCollectLiterals(ctx)
 	for _, c := range e.Cases {
-		c.genCollectLiterals(ctx)
+		c.Body.genCollectLiterals(ctx)
 	}
+}
+
+func (e *MatchExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Left.genCountStack(ctx)
+	for _, c := range e.Cases {
+		if s := c.Body.genCountStack(ctx); s > stack {
+			stack = s
+		}
+	}
+	return stack
 }
 
 func (e *MatchExpr) genCountVars(ctx *genCtx) int {
@@ -891,6 +984,19 @@ func (e *DynamicCallExpr) genCollectLiterals(ctx *genCtx) {
 	}
 }
 
+func (e *DynamicCallExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Recv.genCountStack(ctx)
+	for i, a := range e.Args {
+		if s := 1 + i + a.genCountStack(ctx); s > stack {
+			stack = s
+		}
+	}
+	if s := 1 + len(e.Args) + 1; s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *DynamicCallExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Recv.genCountVars(ctx)
 	for _, a := range e.Args {
@@ -928,6 +1034,19 @@ func (e *SuperCallExpr) genCollectLiterals(ctx *genCtx) {
 	}
 }
 
+func (e *SuperCallExpr) genCountStack(ctx *genCtx) int {
+	stack := 1
+	for i, a := range e.Args {
+		if s := 1 + i + a.genCountStack(ctx); s > stack {
+			stack = s
+		}
+	}
+	if s := 1 + len(e.Args) + 1; s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *SuperCallExpr) genCountVars(ctx *genCtx) int {
 	vars := 0
 	for _, a := range e.Args {
@@ -956,6 +1075,19 @@ func (e *StaticCallExpr) genCollectLiterals(ctx *genCtx) {
 	}
 }
 
+func (e *StaticCallExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Recv.genCountStack(ctx)
+	for i, a := range e.Args {
+		if s := 1 + i + a.genCountStack(ctx); s > stack {
+			stack = s
+		}
+	}
+	if s := 1 + len(e.Args) + 1; s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *StaticCallExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Recv.genCountVars(ctx)
 	for _, a := range e.Args {
@@ -977,6 +1109,10 @@ func (e *StaticCallExpr) genCode(ctx *genCtx) {
 }
 
 func (e *AllocExpr) genCollectLiterals(ctx *genCtx) {
+}
+
+func (e *AllocExpr) genCountStack(ctx *genCtx) int {
+	return 0
 }
 
 func (e *AllocExpr) genCountVars(ctx *genCtx) int {
@@ -1015,6 +1151,10 @@ func (e *AllocExpr) genCode(ctx *genCtx) {
 
 func (e *AssignExpr) genCollectLiterals(ctx *genCtx) {
 	e.Expr.genCollectLiterals(ctx)
+}
+
+func (e *AssignExpr) genCountStack(ctx *genCtx) int {
+	return e.Expr.genCountVars(ctx)
 }
 
 func (e *AssignExpr) genCountVars(ctx *genCtx) int {
@@ -1058,6 +1198,14 @@ func (e *AssignExpr) genCodeUnused(ctx *genCtx) {
 func (e *VarExpr) genCollectLiterals(ctx *genCtx) {
 	e.Init.genCollectLiterals(ctx)
 	e.Body.genCollectLiterals(ctx)
+}
+
+func (e *VarExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Init.genCountStack(ctx)
+	if s := e.Body.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
 }
 
 func (e *VarExpr) genCountVars(ctx *genCtx) int {
@@ -1117,6 +1265,14 @@ func (e *ChainExpr) genCollectLiterals(ctx *genCtx) {
 	e.Expr.genCollectLiterals(ctx)
 }
 
+func (e *ChainExpr) genCountStack(ctx *genCtx) int {
+	stack := e.Pre.genCountStack(ctx)
+	if s := e.Expr.genCountStack(ctx); s > stack {
+		stack = s
+	}
+	return stack
+}
+
 func (e *ChainExpr) genCountVars(ctx *genCtx) int {
 	vars := e.Pre.genCountVars(ctx)
 	if v := e.Expr.genCountVars(ctx); v > vars {
@@ -1148,6 +1304,10 @@ func (e *ChainExpr) genCodeUnused(ctx *genCtx) {
 func (e *ThisExpr) genCollectLiterals(ctx *genCtx) {
 }
 
+func (e *ThisExpr) genCountStack(ctx *genCtx) int {
+	return 0
+}
+
 func (e *ThisExpr) genCountVars(ctx *genCtx) int {
 	return 0
 }
@@ -1161,6 +1321,10 @@ func (e *ThisExpr) genCodeUnused(ctx *genCtx) {
 }
 
 func (e *NullExpr) genCollectLiterals(ctx *genCtx) {
+}
+
+func (e *NullExpr) genCountStack(ctx *genCtx) int {
+	return 0
 }
 
 func (e *NullExpr) genCountVars(ctx *genCtx) int {
@@ -1177,6 +1341,10 @@ func (e *NullExpr) genCodeUnused(ctx *genCtx) {
 func (e *UnitExpr) genCollectLiterals(ctx *genCtx) {
 }
 
+func (e *UnitExpr) genCountStack(ctx *genCtx) int {
+	return 0
+}
+
 func (e *UnitExpr) genCountVars(ctx *genCtx) int {
 	return 0
 }
@@ -1189,6 +1357,10 @@ func (e *UnitExpr) genCodeUnused(ctx *genCtx) {
 }
 
 func (e *NameExpr) genCollectLiterals(ctx *genCtx) {
+}
+
+func (e *NameExpr) genCountStack(ctx *genCtx) int {
+	return 0
 }
 
 func (e *NameExpr) genCountVars(ctx *genCtx) int {
@@ -1225,6 +1397,10 @@ func (e *StringExpr) genCollectLiterals(ctx *genCtx) {
 	e.Lit.LitID = ctx.AddString(e.Lit.Str)
 }
 
+func (e *StringExpr) genCountStack(ctx *genCtx) int {
+	return 0
+}
+
 func (e *StringExpr) genCountVars(ctx *genCtx) int {
 	return 0
 }
@@ -1237,6 +1413,10 @@ func (e *StringExpr) genCodeUnused(ctx *genCtx) {
 }
 
 func (e *BoolExpr) genCollectLiterals(ctx *genCtx) {
+}
+
+func (e *BoolExpr) genCountStack(ctx *genCtx) int {
+	return 0
 }
 
 func (e *BoolExpr) genCountVars(ctx *genCtx) int {
@@ -1266,6 +1446,10 @@ func (e *IntExpr) genCollectLiterals(ctx *genCtx) {
 	e.Lit.LitID = ctx.AddInt(e.Lit.Int)
 }
 
+func (e *IntExpr) genCountStack(ctx *genCtx) int {
+	return 0
+}
+
 func (e *IntExpr) genCountVars(ctx *genCtx) int {
 	return 0
 }
@@ -1284,20 +1468,16 @@ func (e *IntExpr) genCodeUnused(ctx *genCtx) {
 func (e *NativeExpr) genCollectLiterals(ctx *genCtx) {
 }
 
+func (e *NativeExpr) genCountStack(ctx *genCtx) int {
+	panic("NativeExpr.genCountStack should never be called")
+}
+
 func (e *NativeExpr) genCountVars(ctx *genCtx) int {
 	panic("NativeExpr.genCountVars should never be called")
 }
 
 func (e *NativeExpr) genCode(ctx *genCtx) {
 	panic("NativeExpr.genCode should never be called")
-}
-
-func (c *Case) genCollectLiterals(ctx *genCtx) {
-	c.Body.genCollectLiterals(ctx)
-}
-
-func (c *Case) genCountVars(ctx *genCtx) int {
-	return c.Body.genCountVars(ctx)
 }
 
 func (c *Case) genCode(ctx *genCtx) {

@@ -5,6 +5,8 @@
 // tag_offset
 .globl tag_of_garbage
 .set tag_of_garbage, -1
+.globl tag_of_raw
+.set tag_of_raw, -2
 
 // gc_offset
 .globl gc_tag_live
@@ -97,7 +99,7 @@ gc_alloc:
 
 	// collect garbage
 	movl %ecx, -8(%ebp)
-	call gc_collect
+	call runtime.gc_collect
 	movl -8(%ebp), %ecx
 	jmp 1b
 
@@ -193,6 +195,7 @@ gc_alloc:
 	.cfi_endproc
 	.size gc_alloc, .-gc_alloc
 
+.globl gc_collect
 .type gc_collect, @function
 gc_collect:
 	.cfi_startproc
@@ -419,12 +422,22 @@ gc_check:
 	// it is garbage
 	cmpl $tag_of_garbage, tag_offset(%eax)
 	je 2f
+
+	// or raw?
+	cmpl $tag_of_raw, tag_offset(%eax)
+	je 19f
+
 	// garbage has invalid tag
 	int $3
 2:
 	cmpl $gc_tag_garbage, gc_offset(%eax)
 	je 3f
 	// garbage has invalid GC tag
+	int $3
+19:
+	cmpl $gc_tag_root, gc_offset(%eax)
+	je 3f
+	// raw has invalid GC tag
 	int $3
 3:
 	movl size_offset(%eax), %ebx

@@ -1,0 +1,25 @@
+class Main() extends IO() {
+	{
+		var ch : Channel = new Channel();
+		new Coroutine(new Counter(10, ch));
+		while (ch.recv() match {
+			case null =>
+				out("Done!\n");
+				false
+			case i : Int =>
+				out_any(i).out("\n");
+				true
+		}) ()
+	};
+}
+
+class Counter(var max : Int, var ch : Channel) extends Runnable() {
+	override def run() : Unit = {
+		var current : Int = 0;
+		while (current <= max) {
+			ch.send(current);
+			current = current + 1
+		};
+		ch.send(null)
+	};
+}

@@ -319,3 +319,36 @@ runtime.bounds_panic:
 
 	.cfi_endproc
 	.size runtime.bounds_panic, .-runtime.bounds_panic
+
+.data
+
+.align 2
+deadlock_panic_before:
+	.ascii "Deadlock\n"
+.set deadlock_panic_before_length, .-deadlock_panic_before
+
+.text
+
+.globl runtime.deadlock_panic
+.type runtime.deadlock_panic, @function
+runtime.deadlock_panic:
+	.cfi_startproc
+	push %ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset ebp, -8
+	movl %esp, %ebp
+	.cfi_def_cfa_register ebp
+	subl $0, %esp
+
+	movl $4, %eax
+	movl $1, %ebx
+	leal deadlock_panic_before, %ecx
+	movl $deadlock_panic_before_length, %edx
+	int $0x80
+
+	movl $1, %eax
+	movl $1, %ebx
+	int $0x80
+
+	.cfi_endproc
+	.size runtime.deadlock_panic, .-runtime.deadlock_panic

@@ -172,6 +172,54 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 		"Null":    nullClass,
 	}
 
+	if opt.Coroutine {
+		p.Classes = append(p.Classes, &Class{
+			Type: &Ident{
+				Pos:  token.NoPos,
+				Name: "runtimeMain",
+			},
+			Formals: nil,
+			Extends: &Extends{
+				Type: &Ident{
+					Pos:  token.NoPos,
+					Name: "Runnable",
+				},
+			},
+			Features: []Feature{
+				&Method{
+					Override: true,
+					Name: &Ident{
+						Pos:  token.NoPos,
+						Name: "run",
+					},
+					Args: nil,
+					Type: &Ident{
+						Pos:  token.NoPos,
+						Name: "Unit",
+					},
+					Body: &ChainExpr{
+						Pre: &StaticCallExpr{
+							Recv: &AllocExpr{
+								Type: &Ident{
+									Pos:  token.NoPos,
+									Name: "Main",
+								},
+							},
+							Name: &Ident{
+								Pos:  token.NoPos,
+								Name: "Main",
+							},
+							Args: nil,
+						},
+						Expr: &UnitExpr{
+							Pos: token.NoPos,
+						},
+					},
+				},
+			},
+		})
+	}
+
 	for _, c := range p.Classes {
 		if o, ok := p.classMap[c.Type.Name]; ok {
 			ctx.Report(c.Type.Pos, "duplicate declaration of class "+c.Type.Name)
@@ -263,6 +311,34 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 			Name: "Main",
 		},
 	}
+	if opt.Coroutine {
+		p.Main = &StaticCallExpr{
+			Recv: &AllocExpr{
+				Type: &Ident{
+					Pos:  token.NoPos,
+					Name: "Coroutine",
+				},
+			},
+			Name: &Ident{
+				Pos:  token.NoPos,
+				Name: "Coroutine",
+			},
+			Args: []Expr{
+				&StaticCallExpr{
+					Recv: &AllocExpr{
+						Type: &Ident{
+							Pos:  token.NoPos,
+							Name: "runtimeMain",
+						},
+					},
+					Name: &Ident{
+						Pos:  token.NoPos,
+						Name: "runtimeMain",
+					},
+				},
+			},
+		}
+	}
 	if opt.Benchmark != 1 {
 		p.Main = &VarExpr{
 			Name: &Ident{
@@ -270,15 +346,13 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 				Name: "benchmark",
 			},
 			Type: &Ident{
-				Pos:   token.NoPos,
-				Name:  "Int",
-				Class: ctx.intClass,
+				Pos:  token.NoPos,
+				Name: "Int",
 			},
 			Init: &IntExpr{
 				Lit: &IntLit{
-					Pos:   token.NoPos,
-					Int:   0,
-					Class: ctx.intClass,
+					Pos: token.NoPos,
+					Int: 0,
 				},
 			},
 			Body: &WhileExpr{
@@ -292,20 +366,18 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 					},
 					Right: &IntExpr{
 						Lit: &IntLit{
-							Pos:   token.NoPos,
-							Int:   int32(opt.Benchmark),
-							Class: ctx.intClass,
+							Pos: token.NoPos,
+							Int: int32(opt.Benchmark),
 						},
 					},
-					Int: &Ident{
-						Pos:   token.NoPos,
-						Name:  "Int",
-						Class: ctx.intClass,
-					},
+
 					Boolean: &Ident{
-						Pos:   token.NoPos,
-						Name:  "Boolean",
-						Class: ctx.booleanClass,
+						Pos:  token.NoPos,
+						Name: "Boolean",
+					},
+					Int: &Ident{
+						Pos:  token.NoPos,
+						Name: "Int",
 					},
 				},
 				Body: &ChainExpr{
@@ -330,32 +402,32 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 									Class: ctx.intClass,
 								},
 							},
+
 							Int: &Ident{
-								Pos:   token.NoPos,
-								Name:  "Int",
-								Class: ctx.intClass,
+								Pos:  token.NoPos,
+								Name: "Int",
 							},
 						},
+
 						Unit: &Ident{
-							Pos:   token.NoPos,
-							Name:  "Unit",
-							Class: ctx.unitClass,
+							Pos:  token.NoPos,
+							Name: "Unit",
 						},
 					},
 				},
+
 				Boolean: &Ident{
-					Pos:   token.NoPos,
-					Name:  "Boolean",
-					Class: ctx.booleanClass,
+					Pos:  token.NoPos,
+					Name: "Boolean",
 				},
 				Unit: &Ident{
-					Pos:   token.NoPos,
-					Name:  "Unit",
-					Class: ctx.unitClass,
+					Pos:  token.NoPos,
+					Name: "Unit",
 				},
 			},
 		}
 	}
+	p.Main.semantTypes(ctx, nil)
 	p.Main.semantIdentifiers(ctx, nil)
 
 	return ctx.haveErrors
@@ -425,9 +497,8 @@ func (c *Class) semantMakeConstructor(ctx *semCtx) {
 					Expr: f.Init,
 
 					Unit: &Ident{
-						Pos:   f.Name.Pos,
-						Name:  "Unit",
-						Class: ctx.unitClass,
+						Pos:  token.NoPos,
+						Name: "Unit",
 					},
 				},
 				Expr: constructor,
@@ -435,32 +506,43 @@ func (c *Class) semantMakeConstructor(ctx *semCtx) {
 		}
 	}
 
+	var useNative = false
+
+	switch c.Type.Name {
+	case "ArrayAny":
+		useNative = true
+
+	case "Coroutine", "Channel":
+		useNative = ctx.opt.Coroutine
+	}
+
 	switch c.Type.Name {
 	case "Int", "Boolean", "Unit", "Symbol":
 		return
-
-	case "ArrayAny":
-		constructor = &NativeExpr{
-			Pos: c.Type.Pos,
-		}
 
 	case "Any":
 		// don't call super-constructor because there isn't one.
 
 	default:
-		constructor = &ChainExpr{
-			Pre: &StaticCallExpr{
-				Recv: &ThisExpr{
-					Pos:   c.Extends.Type.Pos,
-					Class: c.Extends.Type.Class,
+		if useNative {
+			constructor = &NativeExpr{
+				Pos: c.Type.Pos,
+			}
+		} else {
+			constructor = &ChainExpr{
+				Pre: &StaticCallExpr{
+					Recv: &ThisExpr{
+						Pos:   c.Extends.Type.Pos,
+						Class: c.Extends.Type.Class,
+					},
+					Name: &Ident{
+						Pos:  c.Extends.Type.Pos,
+						Name: c.Extends.Type.Name,
+					},
+					Args: c.Extends.Args,
 				},
-				Name: &Ident{
-					Pos:  c.Extends.Type.Pos,
-					Name: c.Extends.Type.Name,
-				},
-				Args: c.Extends.Args,
-			},
-			Expr: constructor,
+				Expr: constructor,
+			}
 		}
 	}
 
@@ -657,6 +739,10 @@ func (f *Attribute) semantTypes(ctx *semCtx, c *Class) {
 			return
 		case c.Type.Name == "ArrayAny" && f.Name.Name == "array_field":
 			return
+		case ctx.opt.Coroutine && c.Type.Name == "Coroutine" && f.Name.Name == "coroutine_field":
+			return
+		case ctx.opt.Coroutine && c.Type.Name == "Channel" && f.Name.Name == "channel_field":
+			return
 		}
 	}
 	ctx.LookupClass(f.Type)
@@ -703,6 +789,14 @@ func (f *Method) semantTypes(ctx *semCtx, c *Class) {
 		case c.Type.Name == "ArrayAny" && f.Name.Name == "set":
 			return
 		case c.Type.Name == "ArrayAny" && f.Name.Name == "ArrayAny":
+			return
+		case ctx.opt.Coroutine && c.Type.Name == "Coroutine" && f.Name.Name == "Coroutine":
+			return
+		case ctx.opt.Coroutine && c.Type.Name == "Channel" && f.Name.Name == "recv":
+			return
+		case ctx.opt.Coroutine && c.Type.Name == "Channel" && f.Name.Name == "send":
+			return
+		case ctx.opt.Coroutine && c.Type.Name == "Channel" && f.Name.Name == "Channel":
 			return
 		}
 	}

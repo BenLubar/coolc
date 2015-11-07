@@ -23,6 +23,7 @@ func main() {
 
 	flagOutput := flag.String("o", "", "output filename")
 	flag.IntVar(&opt.Benchmark, "benchmark", 1, "repeat the program this many times")
+	flag.BoolVar(&opt.Coroutine, "coroutine", false, "enable coroutine support")
 
 	flag.Parse()
 
@@ -48,6 +49,13 @@ func main() {
 		f.SetLinesForContent(basicCool)
 
 		haveErrors = prog.Parse(f, bytes.NewReader(basicCool))
+	}
+
+	if opt.Coroutine {
+		f := fset.AddFile("coroutine.cool", -1, len(coroutineCool))
+		f.SetLinesForContent(coroutineCool)
+
+		haveErrors = prog.Parse(f, bytes.NewReader(coroutineCool))
 	}
 
 	for _, name := range flag.Args() {
@@ -79,5 +87,9 @@ func main() {
 	}
 	defer f.Close()
 
-	prog.CodeGen(opt, fset, f)
+	err = prog.CodeGen(opt, fset, f)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
 }

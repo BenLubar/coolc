@@ -4,7 +4,10 @@ all: libcool.a
 %: libcool.a %.o
 	ld -melf_i386 -o $@ --start-group $^
 
-libcool.a: basic.o runtime_linux.o gc.o
+libcool.a: basic.o nosched.o runtime_linux.o gc.o
+	ar rcs $@ $^
+
+libcoolsched.a: basic.o sched.o runtime_linux.o gc.o
 	ar rcs $@ $^
 
 %.o: %.s basic_defs.s

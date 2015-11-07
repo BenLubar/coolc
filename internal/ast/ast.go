@@ -180,6 +180,7 @@ type Expr interface {
 	semantIdentifiers(*semCtx, semantIdentifiers) *Class
 
 	genCollectLiterals(*genCtx)
+	genCountStack(*genCtx) int
 	genCountVars(*genCtx) int
 	genCode(*genCtx)
 }

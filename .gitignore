@@ -1,5 +1,8 @@
 coolc
 *.o
 libcool/libcool.a
+libcool/libcoolsched.a
 testdata/good*.s
 testdata/good*.exe
+testdata/coroutine*.s
+testdata/coroutine*.exe
