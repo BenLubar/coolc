@@ -223,7 +223,7 @@ func benchmarkCoroutine(b *testing.B, prefix string) {
 }
 
 func TestCoroutine(t *testing.T) {
-	const expected = 1
+	const expected = 3
 
 	cases, err := filepath.Glob(filepath.Join("testdata", "coroutine????.expected"))
 	if err != nil {
@@ -240,6 +240,8 @@ func TestCoroutineGood0001(t *testing.T) { testCoroutine(t, filepath.Join("testd
 func TestCoroutineGood0002(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0002")) }
 func TestCoroutineGood0003(t *testing.T) { testCoroutine(t, filepath.Join("testdata", "good0003")) }
 func TestCoroutine0000(t *testing.T)     { testCoroutine(t, filepath.Join("testdata", "coroutine0000")) }
+func TestCoroutine0001(t *testing.T)     { testCoroutine(t, filepath.Join("testdata", "coroutine0001")) }
+func TestCoroutine0002(t *testing.T)     { testCoroutine(t, filepath.Join("testdata", "coroutine0002")) }
 
 func BenchmarkCoroutineGood0000(b *testing.B) {
 	benchmarkCoroutine(b, filepath.Join("testdata", "good0000"))
@@ -255,4 +257,10 @@ func BenchmarkCoroutineGood0003(b *testing.B) {
 }
 func BenchmarkCoroutine0000(b *testing.B) {
 	benchmarkCoroutine(b, filepath.Join("testdata", "coroutine0000"))
+}
+func BenchmarkCoroutine0001(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "coroutine0001"))
+}
+func BenchmarkCoroutine0002(b *testing.B) {
+	benchmarkCoroutine(b, filepath.Join("testdata", "coroutine0002"))
 }

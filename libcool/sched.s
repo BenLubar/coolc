@@ -56,6 +56,8 @@ runtime.morestack:
 	cmpl %eax, %edx
 	jg 2f
 
+	int $3
+
 	// make a new stack
 	movl %ebx, -4(%ebp)
 	addl $min_stack_size, %eax
@@ -288,7 +290,7 @@ runtime.sched1:
 6:
 	leave
 	.cfi_def_cfa esp, 4
-	ret
+	ret $8
 	.cfi_endproc
 	.size Coroutine.Coroutine, .-Coroutine.Coroutine
 
@@ -394,7 +396,7 @@ Channel.Channel:
 
 	leave
 	.cfi_def_cfa esp, 4
-	ret
+	ret $4
 	.cfi_endproc
 	.size Channel.Channel, .-Channel.Channel
 
@@ -436,7 +438,7 @@ Channel.send:
 
 	leave
 	.cfi_def_cfa esp, 4
-	ret
+	ret $8
 	.cfi_endproc
 	.size Channel.send, .-Channel.send
 
@@ -468,7 +470,7 @@ Channel.recv:
 
 	leave
 	.cfi_def_cfa esp, 4
-	ret
+	ret $4
 	.cfi_endproc
 	.size Channel.recv, .-Channel.recv
 

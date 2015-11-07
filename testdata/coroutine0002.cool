@@ -1,0 +1,19 @@
+class Main() extends IO() {
+	{
+		var in : Channel = new Channel();
+		var out : Channel = in;
+		var i : Int = 0;
+		while (i < 1000) {
+			var out1 : Channel = new Channel();
+			new Coroutine(new Inc(out, out1));
+			out = out1;
+			i = i + 1
+		};
+		in.send(0);
+		out_any(out.recv()).out("\n")
+	};
+}
+
+class Inc(var in : Channel, var out : Channel) extends Runnable() {
+	override def run() : Unit = out.send(in.recv() match { case i : Int => i} + 1);
+}

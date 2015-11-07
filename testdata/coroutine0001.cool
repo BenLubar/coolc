@@ -1,0 +1,45 @@
+class Main() extends IO() {
+	{
+		var ch : Channel = new Channel();
+		new Coroutine(new Gen(ch, 1000));
+		while (ch.recv() match {
+			case null =>
+				false
+			case prime : Int =>
+				out_any(prime).out("\n");
+
+				var ch1 : Channel = new Channel();
+				new Coroutine(new Sieve(ch, ch1, prime));
+				ch = ch1;
+
+				true
+		}) ()
+	};
+}
+
+class Gen(var ch : Channel, var max : Int) extends Runnable() {
+	override def run() : Unit = {
+		var i : Int = 2;
+		while (i < max) {
+			ch.send(i);
+			i = i + 1
+		};
+		ch.send(null)
+	};
+}
+
+class Sieve(var in : Channel, var out : Channel, var prime : Int) extends Runnable() {
+	override def run() : Unit =
+		while (in.recv() match {
+			case null =>
+				out.send(null);
+				false
+
+			case x : Int =>
+				if (x / prime * prime == x)
+					()
+				else
+					out.send(x);
+				true
+		}) ();
+}
