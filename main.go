@@ -24,6 +24,10 @@ func main() {
 	flagOutput := flag.String("o", "", "output filename")
 	flag.IntVar(&opt.Benchmark, "benchmark", 1, "repeat the program this many times")
 	flag.BoolVar(&opt.Coroutine, "coroutine", false, "enable coroutine support")
+	flag.BoolVar(&opt.OptInt, "opt-int", true, "optimization: use raw integers")
+	flag.BoolVar(&opt.OptJump, "opt-jump", true, "optimization: convert conditions to jumps")
+	flag.BoolVar(&opt.OptUnused, "opt-unused", true, "optimization: skip computing unused values")
+	flag.BoolVar(&opt.OptDispatch, "opt-dispatch", true, "optimization: convert dynamic dispatch to a known method to static dispatch")
 
 	flag.Parse()
 

@@ -273,7 +273,7 @@ func genGC(ctx *genCtx, reg string) {
 }
 
 func genCodeRawInt(ctx *genCtx, e Expr) {
-	if raw, ok := e.(ArithmeticExpr); ok {
+	if raw, ok := e.(ArithmeticExpr); ok && ctx.opt.OptInt {
 		raw.genCodeRawInt(ctx)
 	} else {
 		e.genCode(ctx)
@@ -283,7 +283,7 @@ func genCodeRawInt(ctx *genCtx, e Expr) {
 }
 
 func genCodeJump(ctx *genCtx, e Expr, l0, l1 string) {
-	if raw, ok := e.(JumpExpr); ok {
+	if raw, ok := e.(JumpExpr); ok && ctx.opt.OptJump {
 		raw.genCodeJump(ctx, l0, l1)
 	} else {
 		e.genCode(ctx)
@@ -294,7 +294,7 @@ func genCodeJump(ctx *genCtx, e Expr, l0, l1 string) {
 }
 
 func genCodeUnused(ctx *genCtx, e Expr) {
-	if raw, ok := e.(UnusedExpr); ok {
+	if raw, ok := e.(UnusedExpr); ok && ctx.opt.OptUnused {
 		raw.genCodeUnused(ctx)
 	} else {
 		e.genCode(ctx)
@@ -1016,7 +1016,7 @@ func (e *DynamicCallExpr) genCode(ctx *genCtx) {
 		a.genCode(ctx)
 		ctx.Printf("\tpush %%eax\n")
 	}
-	if e.HasOverride {
+	if e.HasOverride || !ctx.opt.OptDispatch {
 		ctx.Printf("\tmovl %d(%%esp), %%eax\n", len(e.Args)*4)
 		ctx.Printf("\tmovl tag_offset(%%eax), %%eax\n")
 		ctx.Printf("\tshll $2, %%eax\n")
@@ -1168,7 +1168,7 @@ func (e *AssignExpr) genCode(ctx *genCtx) {
 
 func (e *AssignExpr) genCodeUnused(ctx *genCtx) {
 	var rawInt bool
-	if e.Name.Object.RawInt() {
+	if e.Name.Object.RawInt() && ctx.opt.OptInt {
 		if raw, ok := e.Expr.(ArithmeticExpr); ok {
 			rawInt = true
 			raw.genCodeRawInt(ctx)
@@ -1179,14 +1179,14 @@ func (e *AssignExpr) genCodeUnused(ctx *genCtx) {
 	}
 	ctx.Printf("\tmovl %s, %%edx\n", e.Name.Object.Base(ctx.this))
 	if e.Name.Object.Stack() {
-		if !e.Name.Object.RawInt() {
+		if !e.Name.Object.RawInt() || !ctx.opt.OptInt {
 			ctx.Printf("\tmovl %s(%%edx), %%ebx\n", e.Name.Object.Offs())
 			genGC(ctx, "%ebx")
 		}
 	} else if !rawInt {
 		genGC(ctx, "%eax")
 	}
-	if e.Name.Object.RawInt() && !rawInt {
+	if e.Name.Object.RawInt() && !rawInt && ctx.opt.OptInt {
 		if e.Name.Object.Stack() {
 			genGC(ctx, "%eax")
 		}
@@ -1218,7 +1218,7 @@ func (e *VarExpr) genCountVars(ctx *genCtx) int {
 
 func (e *VarExpr) genCodeShared(ctx *genCtx, body func()) {
 	var rawInt bool
-	if e.RawInt() {
+	if e.RawInt() && ctx.opt.OptInt {
 		if raw, ok := e.Init.(ArithmeticExpr); ok {
 			rawInt = true
 			raw.genCodeRawInt(ctx)
@@ -1226,7 +1226,7 @@ func (e *VarExpr) genCodeShared(ctx *genCtx, body func()) {
 	}
 	if !rawInt {
 		e.Init.genCode(ctx)
-		if e.RawInt() {
+		if e.RawInt() && ctx.opt.OptInt {
 			genGC(ctx, "%eax")
 			ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
 		}
@@ -1236,7 +1236,7 @@ func (e *VarExpr) genCodeShared(ctx *genCtx, body func()) {
 	ctx.Printf("\tmovl %%eax, %d(%%ebp)\n", offset)
 	body()
 	ctx.Printf("\tmovl %d(%%ebp), %%ebx\n", offset)
-	if !e.RawInt() {
+	if !e.RawInt() || !ctx.opt.OptInt {
 		genGC(ctx, "%ebx")
 	}
 	unreserve()
@@ -1368,7 +1368,7 @@ func (e *NameExpr) genCountVars(ctx *genCtx) int {
 }
 
 func (e *NameExpr) genCode(ctx *genCtx) {
-	if e.Name.Object.RawInt() {
+	if e.Name.Object.RawInt() && ctx.opt.OptInt {
 		ctx.Printf("\tmovl $(size_of_Int + 4), %%eax\n")
 		ctx.Printf("\tmovl $tag_of_Int, %%ebx\n")
 		ctx.Printf("\tcall gc_alloc\n")
@@ -1385,7 +1385,7 @@ func (e *NameExpr) genCode(ctx *genCtx) {
 func (e *NameExpr) genCodeRawInt(ctx *genCtx) {
 	ctx.Printf("\tmovl %s, %%edx\n", e.Name.Object.Base(ctx.this))
 	ctx.Printf("\tmovl %s(%%edx), %%eax\n", e.Name.Object.Offs())
-	if !e.Name.Object.RawInt() {
+	if !e.Name.Object.RawInt() || !ctx.opt.OptInt {
 		ctx.Printf("\tmovl offset_of_Int.value(%%eax), %%eax\n")
 	}
 }
