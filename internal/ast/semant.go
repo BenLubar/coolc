@@ -172,7 +172,38 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 		"Null":    nullClass,
 	}
 
+	var mainRun *Method
 	if opt.Coroutine {
+		mainRun = &Method{
+			Override: true,
+			Name: &Ident{
+				Pos:  token.NoPos,
+				Name: "run",
+			},
+			Args: nil,
+			Type: &Ident{
+				Pos:  token.NoPos,
+				Name: "Unit",
+			},
+			Body: &ChainExpr{
+				Pre: &StaticCallExpr{
+					Recv: &AllocExpr{
+						Type: &Ident{
+							Pos:  token.NoPos,
+							Name: "Main",
+						},
+					},
+					Name: &Ident{
+						Pos:  token.NoPos,
+						Name: "Main",
+					},
+					Args: nil,
+				},
+				Expr: &UnitExpr{
+					Pos: token.NoPos,
+				},
+			},
+		}
 		p.Classes = append(p.Classes, &Class{
 			Type: &Ident{
 				Pos:  token.NoPos,
@@ -186,36 +217,7 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 				},
 			},
 			Features: []Feature{
-				&Method{
-					Override: true,
-					Name: &Ident{
-						Pos:  token.NoPos,
-						Name: "run",
-					},
-					Args: nil,
-					Type: &Ident{
-						Pos:  token.NoPos,
-						Name: "Unit",
-					},
-					Body: &ChainExpr{
-						Pre: &StaticCallExpr{
-							Recv: &AllocExpr{
-								Type: &Ident{
-									Pos:  token.NoPos,
-									Name: "Main",
-								},
-							},
-							Name: &Ident{
-								Pos:  token.NoPos,
-								Name: "Main",
-							},
-							Args: nil,
-						},
-						Expr: &UnitExpr{
-							Pos: token.NoPos,
-						},
-					},
-				},
+				mainRun,
 			},
 		})
 	}
@@ -339,20 +341,33 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 			},
 		}
 	}
+
+	p.Main.semantTypes(ctx, nil)
+	p.Main.semantIdentifiers(ctx, nil)
+
+	pmain := &p.Main
+	if opt.Coroutine {
+		pmain = &mainRun.Body
+	}
+
 	if opt.Benchmark != 1 {
-		p.Main = &VarExpr{
+		var benchmark VarExpr
+		benchmark = VarExpr{
 			Name: &Ident{
-				Pos:  token.NoPos,
-				Name: "benchmark",
+				Pos:    token.NoPos,
+				Name:   "benchmark",
+				Object: &benchmark,
 			},
 			Type: &Ident{
-				Pos:  token.NoPos,
-				Name: "Int",
+				Pos:   token.NoPos,
+				Name:  "Int",
+				Class: ctx.intClass,
 			},
 			Init: &IntExpr{
 				Lit: &IntLit{
-					Pos: token.NoPos,
-					Int: 0,
+					Pos:   token.NoPos,
+					Int:   0,
+					Class: ctx.intClass,
 				},
 			},
 			Body: &WhileExpr{
@@ -360,39 +375,45 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 					Pos: token.NoPos,
 					Left: &NameExpr{
 						Name: &Ident{
-							Pos:  token.NoPos,
-							Name: "benchmark",
+							Pos:    token.NoPos,
+							Name:   "benchmark",
+							Object: &benchmark,
 						},
 					},
 					Right: &IntExpr{
 						Lit: &IntLit{
-							Pos: token.NoPos,
-							Int: int32(opt.Benchmark),
+							Pos:   token.NoPos,
+							Int:   int32(opt.Benchmark),
+							Class: ctx.intClass,
 						},
 					},
 
 					Boolean: &Ident{
-						Pos:  token.NoPos,
-						Name: "Boolean",
+						Pos:   token.NoPos,
+						Name:  "Boolean",
+						Class: ctx.booleanClass,
 					},
 					Int: &Ident{
-						Pos:  token.NoPos,
-						Name: "Int",
+						Pos:   token.NoPos,
+						Name:  "Int",
+						Class: ctx.intClass,
 					},
 				},
 				Body: &ChainExpr{
-					Pre: p.Main,
+					Pre: *pmain,
 					Expr: &AssignExpr{
 						Name: &Ident{
-							Pos:  token.NoPos,
-							Name: "benchmark",
+							Pos:    token.NoPos,
+							Name:   "benchmark",
+							Object: &benchmark,
 						},
 						Expr: &AddExpr{
 							Pos: token.NoPos,
 							Left: &NameExpr{
 								Name: &Ident{
-									Pos:  token.NoPos,
-									Name: "benchmark",
+									Pos:    token.NoPos,
+									Name:   "benchmark",
+									Object: &benchmark,
 								},
 							},
 							Right: &IntExpr{
@@ -404,31 +425,34 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 							},
 
 							Int: &Ident{
-								Pos:  token.NoPos,
-								Name: "Int",
+								Pos:   token.NoPos,
+								Name:  "Int",
+								Class: ctx.intClass,
 							},
 						},
 
 						Unit: &Ident{
-							Pos:  token.NoPos,
-							Name: "Unit",
+							Pos:   token.NoPos,
+							Name:  "Unit",
+							Class: ctx.unitClass,
 						},
 					},
 				},
 
 				Boolean: &Ident{
-					Pos:  token.NoPos,
-					Name: "Boolean",
+					Pos:   token.NoPos,
+					Name:  "Boolean",
+					Class: ctx.booleanClass,
 				},
 				Unit: &Ident{
-					Pos:  token.NoPos,
-					Name: "Unit",
+					Pos:   token.NoPos,
+					Name:  "Unit",
+					Class: ctx.unitClass,
 				},
 			},
 		}
+		*pmain = &benchmark
 	}
-	p.Main.semantTypes(ctx, nil)
-	p.Main.semantIdentifiers(ctx, nil)
 
 	return ctx.haveErrors
 }
