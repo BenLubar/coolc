@@ -9,4 +9,5 @@ type Options struct {
 	OptUnused   bool
 	OptDispatch bool
 	OptFold     bool
+	OptInline   bool
 }

@@ -29,6 +29,7 @@ func main() {
 	flag.BoolVar(&opt.OptUnused, "opt-unused", true, "optimization: skip computing unused values")
 	flag.BoolVar(&opt.OptDispatch, "opt-dispatch", true, "optimization: convert dynamic dispatch to a known method to static dispatch")
 	flag.BoolVar(&opt.OptFold, "opt-fold", true, "optimization: precompute the values of constant arithmetic expressions")
+	flag.BoolVar(&opt.OptInline, "opt-inline", true, "optimization: inline methods that are sufficiently simple")
 
 	flag.Parse()
 

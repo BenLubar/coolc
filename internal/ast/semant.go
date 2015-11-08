@@ -63,6 +63,8 @@ type semCtx struct {
 	intClass     *Class
 	booleanClass *Class
 
+	inInline bool
+
 	opt Options
 }
 
@@ -162,6 +164,10 @@ func (ctx *semCtx) AssertLess(t1 *Class, id *Ident) {
 }
 
 func semantInline(ctx *semCtx, recv Expr, name *Ident, args []Expr) (Expr, bool) {
+	if ctx.inInline {
+		return nil, false
+	}
+
 	if ctx.opt.OptFold && name.Method.Name.Name == "length" && len(args) == 0 {
 		if str, ok := recv.(*StringExpr); ok {
 			return &IntExpr{
@@ -171,6 +177,74 @@ func semantInline(ctx *semCtx, recv Expr, name *Ident, args []Expr) (Expr, bool)
 					Class: ctx.intClass,
 				},
 			}, true
+		}
+	}
+
+	if !ctx.opt.OptInline {
+		return nil, false
+	}
+
+	wrap := func(expr Expr) (Expr, bool) {
+		for i := len(args) - 1; i >= 0; i-- {
+			a := name.Method.Args[i]
+			var v VarExpr
+			v = VarExpr{
+				Name: &Ident{
+					Pos:    a.Name.Pos,
+					Name:   a.Name.Name,
+					Object: &v,
+				},
+				Type: a.Type,
+				Init: args[i],
+				Body: expr.semantReplaceObject(ctx, a, &v),
+			}
+			expr = &v
+		}
+		var this VarExpr
+		this = VarExpr{
+			Name: &Ident{
+				Pos:    name.Pos,
+				Name:   "this",
+				Object: &this,
+			},
+			Type: name.Method.Parent.Type,
+			Init: recv,
+			Body: expr.semantReplaceObject(ctx, (*AttributeObject)(nil), &this),
+		}
+		return &this, true
+	}
+
+	ctx.inInline = true
+	body := name.Method.Body.semantOpt(ctx)
+	ctx.inInline = false
+
+	if l, ok := body.(*StringExpr); ok {
+		return wrap(l)
+	}
+
+	if l, ok := body.(*IntExpr); ok {
+		return wrap(l)
+	}
+
+	if l, ok := body.(*BoolExpr); ok {
+		return wrap(l)
+	}
+
+	if l, ok := body.(*UnitExpr); ok {
+		return wrap(l)
+	}
+
+	if l, ok := body.(*NullExpr); ok {
+		return wrap(l)
+	}
+
+	if n, ok := body.(*NameExpr); ok {
+		return wrap(n)
+	}
+
+	if a, ok := body.(*AssignExpr); ok {
+		if _, ok := a.Expr.(*NameExpr); ok {
+			return wrap(a)
 		}
 	}
 
@@ -2056,6 +2130,17 @@ func (i *Ident) semantReplaceObject(ctx *semCtx, from, to Object) *Ident {
 			Pos:    i.Pos,
 			Name:   i.Name,
 			Object: to,
+		}
+	}
+
+	if obj, ok := i.Object.(*AttributeObject); ok && obj.Object == from {
+		return &Ident{
+			Pos:  i.Pos,
+			Name: i.Name,
+			Object: &AttributeObject{
+				Object:    to,
+				Attribute: obj.Attribute,
+			},
 		}
 	}
 
