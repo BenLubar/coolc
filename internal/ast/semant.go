@@ -911,6 +911,15 @@ func (e *NegativeExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 
 func (e *NegativeExpr) semantOpt(ctx *semCtx) Expr {
 	expr := e.Expr.semantOpt(ctx)
+	if i, ok := expr.(*IntExpr); ok && ctx.opt.OptFold {
+		return &IntExpr{
+			Lit: &IntLit{
+				Pos:   i.Lit.Pos,
+				Int:   -i.Lit.Int,
+				Class: i.Lit.Class,
+			},
+		}
+	}
 	if expr != e.Expr {
 		return &NegativeExpr{
 			Expr: expr,
@@ -1115,6 +1124,17 @@ func (e *MultiplyExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 func (e *MultiplyExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
+	if li, ok := left.(*IntExpr); ok && ctx.opt.OptFold {
+		if ri, ok := right.(*IntExpr); ok {
+			return &IntExpr{
+				Lit: &IntLit{
+					Pos:   e.Pos,
+					Int:   li.Lit.Int * ri.Lit.Int,
+					Class: li.Lit.Class,
+				},
+			}
+		}
+	}
 	if left != e.Left || right != e.Right {
 		return &MultiplyExpr{
 			Left:  left,
@@ -1155,6 +1175,17 @@ func (e *DivideExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 func (e *DivideExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
+	if li, ok := left.(*IntExpr); ok && ctx.opt.OptFold {
+		if ri, ok := right.(*IntExpr); ok && ri.Lit.Int != 0 {
+			return &IntExpr{
+				Lit: &IntLit{
+					Pos:   e.Pos,
+					Int:   li.Lit.Int / ri.Lit.Int,
+					Class: li.Lit.Class,
+				},
+			}
+		}
+	}
 	if left != e.Left || right != e.Right {
 		return &DivideExpr{
 			Left:  left,
@@ -1195,6 +1226,17 @@ func (e *AddExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 func (e *AddExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
+	if li, ok := left.(*IntExpr); ok && ctx.opt.OptFold {
+		if ri, ok := right.(*IntExpr); ok {
+			return &IntExpr{
+				Lit: &IntLit{
+					Pos:   e.Pos,
+					Int:   li.Lit.Int + ri.Lit.Int,
+					Class: li.Lit.Class,
+				},
+			}
+		}
+	}
 	if left != e.Left || right != e.Right {
 		return &AddExpr{
 			Left:  left,
@@ -1235,6 +1277,17 @@ func (e *SubtractExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 func (e *SubtractExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
+	if li, ok := left.(*IntExpr); ok && ctx.opt.OptFold {
+		if ri, ok := right.(*IntExpr); ok {
+			return &IntExpr{
+				Lit: &IntLit{
+					Pos:   e.Pos,
+					Int:   li.Lit.Int - ri.Lit.Int,
+					Class: li.Lit.Class,
+				},
+			}
+		}
+	}
 	if left != e.Left || right != e.Right {
 		return &SubtractExpr{
 			Left:  left,

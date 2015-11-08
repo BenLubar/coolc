@@ -8,4 +8,5 @@ type Options struct {
 	OptJump     bool
 	OptUnused   bool
 	OptDispatch bool
+	OptFold     bool
 }
