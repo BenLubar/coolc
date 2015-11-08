@@ -162,6 +162,18 @@ func (ctx *semCtx) AssertLess(t1 *Class, id *Ident) {
 }
 
 func semantInline(ctx *semCtx, recv Expr, name *Ident, args []Expr) (Expr, bool) {
+	if ctx.opt.OptFold && name.Method.Name.Name == "length" && len(args) == 0 {
+		if str, ok := recv.(*StringExpr); ok {
+			return &IntExpr{
+				Lit: &IntLit{
+					Pos:   str.Lit.Pos,
+					Int:   int32(len(str.Lit.Str)),
+					Class: ctx.intClass,
+				},
+			}, true
+		}
+	}
+
 	return nil, false
 }
 
