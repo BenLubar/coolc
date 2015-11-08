@@ -107,6 +107,36 @@ func (a *Formal) RawInt() bool {
 	return false
 }
 
+// AttributeObject is a type used in optimized ASTs that allows access to
+// another object's attributes.
+type AttributeObject struct {
+	// Object is the base of this attribute. Object.Base must return a
+	// register, not an offset from a register.
+	Object Object
+	// Attribute is the attribute to access.
+	Attribute *Attribute
+}
+
+// Base implements Object.
+func (a *AttributeObject) Base(this int) string {
+	return a.Object.Offs() + "(" + a.Object.Base(this) + ")"
+}
+
+// Offs implements Object.
+func (a *AttributeObject) Offs() string {
+	return "offset_of_" + a.Attribute.Parent.Type.Name + "." + a.Attribute.Name.Name
+}
+
+// Stack implements Object.
+func (a *AttributeObject) Stack() bool {
+	return false
+}
+
+// RawInt implements Object.
+func (a *AttributeObject) RawInt() bool {
+	return a.Attribute.RawInt()
+}
+
 // Feature is a feature as defined by section 3.1 of CoolAid.
 type Feature interface {
 	semantTypes(*semCtx, *Class)
@@ -178,6 +208,8 @@ type Method struct {
 type Expr interface {
 	semantTypes(*semCtx, *Class)
 	semantIdentifiers(*semCtx, semantIdentifiers) *Class
+	semantOpt(*semCtx) Expr
+	semantReplaceObject(*semCtx, Object, Object) Expr
 
 	genCollectLiterals(*genCtx)
 	genCountStack(*genCtx) int

@@ -161,6 +161,10 @@ func (ctx *semCtx) AssertLess(t1 *Class, id *Ident) {
 	}
 }
 
+func semantInline(ctx *semCtx, recv Expr, name *Ident, args []Expr) (Expr, bool) {
+	return nil, false
+}
+
 func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 	ctx := &semCtx{
 		program: p,
@@ -453,6 +457,19 @@ func (p *Program) Semant(opt Options, fset *token.FileSet) bool {
 		}
 		*pmain = &benchmark
 	}
+
+	if ctx.haveErrors {
+		return ctx.haveErrors
+	}
+
+	for _, c := range p.Classes {
+		for _, f := range c.Features {
+			if m, ok := f.(*Method); ok {
+				m.Body = m.Body.semantOpt(ctx)
+			}
+		}
+	}
+	p.Main = p.Main.semantOpt(ctx)
 
 	return ctx.haveErrors
 }
@@ -860,6 +877,28 @@ func (e *NotExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Boolean.Class
 }
 
+func (e *NotExpr) semantOpt(ctx *semCtx) Expr {
+	expr := e.Expr.semantOpt(ctx)
+	if expr != e.Expr {
+		return &NotExpr{
+			Expr:    expr,
+			Boolean: e.Boolean,
+		}
+	}
+	return e
+}
+
+func (e *NotExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	expr := e.Expr.semantReplaceObject(ctx, from, to)
+	if expr != e.Expr {
+		return &NotExpr{
+			Expr:    expr,
+			Boolean: e.Boolean,
+		}
+	}
+	return e
+}
+
 func (e *NegativeExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Int)
 	e.Expr.semantTypes(ctx, c)
@@ -868,6 +907,28 @@ func (e *NegativeExpr) semantTypes(ctx *semCtx, c *Class) {
 func (e *NegativeExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	ctx.AssertLess(e.Expr.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *NegativeExpr) semantOpt(ctx *semCtx) Expr {
+	expr := e.Expr.semantOpt(ctx)
+	if expr != e.Expr {
+		return &NegativeExpr{
+			Expr: expr,
+			Int:  e.Int,
+		}
+	}
+	return e
+}
+
+func (e *NegativeExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	expr := e.Expr.semantReplaceObject(ctx, from, to)
+	if expr != e.Expr {
+		return &NegativeExpr{
+			Expr: expr,
+			Int:  e.Int,
+		}
+	}
+	return e
 }
 
 func (e *IfExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -880,6 +941,36 @@ func (e *IfExpr) semantTypes(ctx *semCtx, c *Class) {
 func (e *IfExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	ctx.AssertLess(e.Cond.semantIdentifiers(ctx, ids), e.Boolean)
 	return ctx.Lub(e.Then.semantIdentifiers(ctx, ids), e.Else.semantIdentifiers(ctx, ids))
+}
+
+func (e *IfExpr) semantOpt(ctx *semCtx) Expr {
+	cond := e.Cond.semantOpt(ctx)
+	then := e.Then.semantOpt(ctx)
+	els := e.Else.semantOpt(ctx)
+	if cond != e.Cond || then != e.Then || els != e.Else {
+		return &IfExpr{
+			Cond:    cond,
+			Then:    then,
+			Else:    els,
+			Boolean: e.Boolean,
+		}
+	}
+	return e
+}
+
+func (e *IfExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	cond := e.Cond.semantReplaceObject(ctx, from, to)
+	then := e.Then.semantReplaceObject(ctx, from, to)
+	els := e.Else.semantReplaceObject(ctx, from, to)
+	if cond != e.Cond || then != e.Then || els != e.Else {
+		return &IfExpr{
+			Cond:    cond,
+			Then:    then,
+			Else:    els,
+			Boolean: e.Boolean,
+		}
+	}
+	return e
 }
 
 func (e *WhileExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -895,6 +986,34 @@ func (e *WhileExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return e.Unit.Class
 }
 
+func (e *WhileExpr) semantOpt(ctx *semCtx) Expr {
+	cond := e.Cond.semantOpt(ctx)
+	body := e.Body.semantOpt(ctx)
+	if cond != e.Cond || body != e.Body {
+		return &WhileExpr{
+			Cond:    cond,
+			Body:    body,
+			Boolean: e.Boolean,
+			Unit:    e.Unit,
+		}
+	}
+	return e
+}
+
+func (e *WhileExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	cond := e.Cond.semantReplaceObject(ctx, from, to)
+	body := e.Body.semantReplaceObject(ctx, from, to)
+	if cond != e.Cond || body != e.Body {
+		return &WhileExpr{
+			Cond:    cond,
+			Body:    body,
+			Boolean: e.Boolean,
+			Unit:    e.Unit,
+		}
+	}
+	return e
+}
+
 func (e *LessOrEqualExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Boolean)
 	ctx.LookupClass(e.Int)
@@ -906,6 +1025,36 @@ func (e *LessOrEqualExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) 
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Boolean.Class
+}
+
+func (e *LessOrEqualExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &LessOrEqualExpr{
+			Left:    left,
+			Right:   right,
+			Pos:     e.Pos,
+			Boolean: e.Boolean,
+			Int:     e.Int,
+		}
+	}
+	return e
+}
+
+func (e *LessOrEqualExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &LessOrEqualExpr{
+			Left:    left,
+			Right:   right,
+			Pos:     e.Pos,
+			Boolean: e.Boolean,
+			Int:     e.Int,
+		}
+	}
+	return e
 }
 
 func (e *LessThanExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -921,6 +1070,36 @@ func (e *LessThanExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	return e.Boolean.Class
 }
 
+func (e *LessThanExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &LessThanExpr{
+			Left:    left,
+			Right:   right,
+			Pos:     e.Pos,
+			Boolean: e.Boolean,
+			Int:     e.Int,
+		}
+	}
+	return e
+}
+
+func (e *LessThanExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &LessThanExpr{
+			Left:    left,
+			Right:   right,
+			Pos:     e.Pos,
+			Boolean: e.Boolean,
+			Int:     e.Int,
+		}
+	}
+	return e
+}
+
 func (e *MultiplyExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Int)
 	e.Left.semantTypes(ctx, c)
@@ -931,6 +1110,34 @@ func (e *MultiplyExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *MultiplyExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &MultiplyExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
+func (e *MultiplyExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &MultiplyExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
 }
 
 func (e *DivideExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -945,6 +1152,34 @@ func (e *DivideExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 	return e.Int.Class
 }
 
+func (e *DivideExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &DivideExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
+func (e *DivideExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &DivideExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
 func (e *AddExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Int)
 	e.Left.semantTypes(ctx, c)
@@ -957,6 +1192,34 @@ func (e *AddExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Int.Class
 }
 
+func (e *AddExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &AddExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
+func (e *AddExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &AddExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
 func (e *SubtractExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Int)
 	e.Left.semantTypes(ctx, c)
@@ -967,6 +1230,34 @@ func (e *SubtractExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *SubtractExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	right := e.Right.semantOpt(ctx)
+	if left != e.Left || right != e.Right {
+		return &SubtractExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
+}
+
+func (e *SubtractExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	right := e.Right.semantReplaceObject(ctx, from, to)
+	if left != e.Left || right != e.Right {
+		return &SubtractExpr{
+			Left:  left,
+			Right: right,
+			Pos:   e.Pos,
+			Int:   e.Int,
+		}
+	}
+	return e
 }
 
 func (e *MatchExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1008,6 +1299,80 @@ func (e *MatchExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return ctx.Lub(ts...)
 }
 
+func (e *MatchExpr) semantOpt(ctx *semCtx) Expr {
+	left := e.Left.semantOpt(ctx)
+	cases := make([]*Case, len(e.Cases))
+	anyCase := false
+	for i, c := range e.Cases {
+		body := c.Body.semantOpt(ctx)
+		if body != c.Body {
+			cases[i] = &Case{
+				Name: c.Name,
+				Type: c.Type,
+				Body: body,
+			}
+			anyCase = true
+		} else {
+			cases[i] = c
+		}
+	}
+	if left != e.Left || anyCase {
+		var m MatchExpr
+		for i, c := range cases {
+			name := c.Name.semantReplaceObject(ctx, e, &m)
+			cases[i] = &Case{
+				Name: name,
+				Type: c.Type,
+				Body: c.Body.semantReplaceObject(ctx, e, &m),
+			}
+		}
+		m = MatchExpr{
+			Left:  left,
+			Pos:   e.Pos,
+			Cases: cases,
+		}
+		return &m
+	}
+	return e
+}
+
+func (e *MatchExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	left := e.Left.semantReplaceObject(ctx, from, to)
+	cases := make([]*Case, len(e.Cases))
+	anyCase := false
+	for i, c := range e.Cases {
+		name := c.Name.semantReplaceObject(ctx, from, to)
+		body := c.Body.semantReplaceObject(ctx, from, to)
+		if name != c.Name || body != c.Body {
+			cases[i] = &Case{
+				Name: name,
+				Type: c.Type,
+				Body: body,
+			}
+			anyCase = true
+		} else {
+			cases[i] = c
+		}
+	}
+	if left != e.Left || anyCase {
+		var m MatchExpr
+		for i, c := range cases {
+			cases[i] = &Case{
+				Name: c.Name.semantReplaceObject(ctx, e, &m),
+				Type: c.Type,
+				Body: c.Body.semantReplaceObject(ctx, e, &m),
+			}
+		}
+		m = MatchExpr{
+			Left:  left,
+			Pos:   e.Pos,
+			Cases: cases,
+		}
+		return &m
+	}
+	return e
+}
+
 func (e *DynamicCallExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Recv.semantTypes(ctx, c)
 	for _, a := range e.Args {
@@ -1039,6 +1404,53 @@ func (e *DynamicCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) 
 
 	ctx.Report(e.Name.Pos, "undeclared method "+left.Type.Name+"."+e.Name.Name)
 	return nothingClass
+}
+
+func (e *DynamicCallExpr) semantOpt(ctx *semCtx) Expr {
+	recv := e.Recv.semantOpt(ctx)
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantOpt(ctx)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if recv != e.Recv || anyArg {
+		e = &DynamicCallExpr{
+			Recv:        recv,
+			Name:        e.Name,
+			Args:        args,
+			HasOverride: e.HasOverride,
+		}
+	}
+	if !e.HasOverride {
+		if inl, ok := semantInline(ctx, e.Recv, e.Name, e.Args); ok {
+			return inl
+		}
+	}
+	return e
+}
+
+func (e *DynamicCallExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	recv := e.Recv.semantReplaceObject(ctx, from, to)
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantReplaceObject(ctx, from, to)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if recv != e.Recv || anyArg {
+		return &DynamicCallExpr{
+			Recv:        recv,
+			Name:        e.Name,
+			Args:        args,
+			HasOverride: e.HasOverride,
+		}
+	}
+	return e
 }
 
 func (e *SuperCallExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1075,6 +1487,56 @@ func (e *SuperCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *C
 	return nothingClass
 }
 
+func (e *SuperCallExpr) semantOpt(ctx *semCtx) Expr {
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantOpt(ctx)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if anyArg {
+		e = &SuperCallExpr{
+			Pos:   e.Pos,
+			Name:  e.Name,
+			Args:  args,
+			Class: e.Class,
+		}
+	}
+	if inl, ok := semantInline(ctx, &ThisExpr{
+		Pos:   e.Pos,
+		Class: e.Class,
+	}, e.Name, e.Args); ok {
+		return inl
+	}
+	return e
+}
+
+func (e *SuperCallExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	recvPrev := &ThisExpr{
+		Pos:   e.Pos,
+		Class: e.Class,
+	}
+	recv := recvPrev.semantReplaceObject(ctx, from, to)
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantReplaceObject(ctx, from, to)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if recv != recvPrev || anyArg {
+		return &StaticCallExpr{
+			Recv: recv,
+			Name: e.Name,
+			Args: args,
+		}
+	}
+	return e
+}
+
 func (e *StaticCallExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Recv.semantTypes(ctx, c)
 	for _, a := range e.Args {
@@ -1106,12 +1568,63 @@ func (e *StaticCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *
 	return nothingClass
 }
 
+func (e *StaticCallExpr) semantOpt(ctx *semCtx) Expr {
+	recv := e.Recv.semantOpt(ctx)
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantOpt(ctx)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if recv != e.Recv || anyArg {
+		e = &StaticCallExpr{
+			Recv: recv,
+			Name: e.Name,
+			Args: args,
+		}
+	}
+	if inl, ok := semantInline(ctx, e.Recv, e.Name, e.Args); ok {
+		return inl
+	}
+	return e
+}
+
+func (e *StaticCallExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	recv := e.Recv.semantReplaceObject(ctx, from, to)
+	args := make([]Expr, len(e.Args))
+	anyArg := false
+	for i, a := range e.Args {
+		args[i] = a.semantReplaceObject(ctx, from, to)
+		if args[i] != a {
+			anyArg = true
+		}
+	}
+	if recv != e.Recv || anyArg {
+		return &StaticCallExpr{
+			Recv: recv,
+			Name: e.Name,
+			Args: args,
+		}
+	}
+	return e
+}
+
 func (e *AllocExpr) semantTypes(ctx *semCtx, c *Class) {
 	ctx.LookupClass(e.Type)
 }
 
 func (e *AllocExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Type.Class
+}
+
+func (e *AllocExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *AllocExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
 }
 
 func (e *AssignExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1127,6 +1640,31 @@ func (e *AssignExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 		ctx.AssertLess(e.Expr.semantIdentifiers(ctx, ids), o.Type)
 	}
 	return e.Unit.Class
+}
+
+func (e *AssignExpr) semantOpt(ctx *semCtx) Expr {
+	expr := e.Expr.semantOpt(ctx)
+	if expr != e.Expr {
+		return &AssignExpr{
+			Name: e.Name,
+			Expr: e.Expr,
+			Unit: e.Unit,
+		}
+	}
+	return e
+}
+
+func (e *AssignExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	name := e.Name.semantReplaceObject(ctx, from, to)
+	expr := e.Expr.semantReplaceObject(ctx, from, to)
+	if name != e.Name || expr != e.Expr {
+		return &AssignExpr{
+			Name: name,
+			Expr: expr,
+			Unit: e.Unit,
+		}
+	}
+	return e
 }
 
 func (e *VarExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1151,6 +1689,46 @@ func (e *VarExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Body.semantIdentifiers(ctx, ids)
 }
 
+func (e *VarExpr) semantOpt(ctx *semCtx) Expr {
+	init := e.Init.semantOpt(ctx)
+	body := e.Body.semantOpt(ctx)
+	unused := body == body.semantReplaceObject(ctx, e, nil)
+	if unused {
+		return &ChainExpr{
+			Pre:  init,
+			Expr: body,
+		}
+	}
+	if init != e.Init || body != e.Body {
+		var v VarExpr
+		v = VarExpr{
+			Name: e.Name.semantReplaceObject(ctx, e, &v),
+			Type: e.Type,
+			Init: init,
+			Body: body.semantReplaceObject(ctx, e, &v),
+		}
+		return &v
+	}
+	return e
+}
+
+func (e *VarExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	name := e.Name.semantReplaceObject(ctx, from, to)
+	init := e.Init.semantReplaceObject(ctx, from, to)
+	body := e.Body.semantReplaceObject(ctx, from, to)
+	if name != e.Name || init != e.Init || body != e.Body {
+		var v VarExpr
+		v = VarExpr{
+			Name: name.semantReplaceObject(ctx, e, &v),
+			Type: e.Type,
+			Init: init,
+			Body: body.semantReplaceObject(ctx, e, &v),
+		}
+		return &v
+	}
+	return e
+}
+
 func (e *ChainExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Pre.semantTypes(ctx, c)
 	e.Expr.semantTypes(ctx, c)
@@ -1161,6 +1739,30 @@ func (e *ChainExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return e.Expr.semantIdentifiers(ctx, ids)
 }
 
+func (e *ChainExpr) semantOpt(ctx *semCtx) Expr {
+	pre := e.Pre.semantOpt(ctx)
+	expr := e.Expr.semantOpt(ctx)
+	if pre != e.Pre || expr != e.Expr {
+		return &ChainExpr{
+			Pre:  pre,
+			Expr: expr,
+		}
+	}
+	return e
+}
+
+func (e *ChainExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	pre := e.Pre.semantReplaceObject(ctx, from, to)
+	expr := e.Expr.semantReplaceObject(ctx, from, to)
+	if pre != e.Pre || expr != e.Expr {
+		return &ChainExpr{
+			Pre:  pre,
+			Expr: expr,
+		}
+	}
+	return e
+}
+
 func (e *ThisExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Class = c
 }
@@ -1169,11 +1771,36 @@ func (e *ThisExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Class
 }
 
+func (e *ThisExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *ThisExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	if from == (*AttributeObject)(nil) {
+		return &NameExpr{
+			Name: &Ident{
+				Pos:    e.Pos,
+				Name:   "this",
+				Object: to,
+			},
+		}
+	}
+	return e
+}
+
 func (e *NullExpr) semantTypes(ctx *semCtx, c *Class) {
 }
 
 func (e *NullExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return nullClass
+}
+
+func (e *NullExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *NullExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
 }
 
 func (e *UnitExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1189,6 +1816,14 @@ func (e *UnitExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Class
 }
 
+func (e *UnitExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *UnitExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
+}
+
 func (e *NameExpr) semantTypes(ctx *semCtx, c *Class) {
 }
 
@@ -1201,12 +1836,34 @@ func (e *NameExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return nothingClass
 }
 
+func (e *NameExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *NameExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	name := e.Name.semantReplaceObject(ctx, from, to)
+	if name != e.Name {
+		return &NameExpr{
+			Name: name,
+		}
+	}
+	return e
+}
+
 func (e *StringExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Lit.semantTypes(ctx, c)
 }
 
 func (e *StringExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Lit.Class
+}
+
+func (e *StringExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *StringExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
 }
 
 func (e *BoolExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1217,12 +1874,28 @@ func (e *BoolExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Lit.Class
 }
 
+func (e *BoolExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *BoolExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
+}
+
 func (e *IntExpr) semantTypes(ctx *semCtx, c *Class) {
 	e.Lit.semantTypes(ctx, c)
 }
 
 func (e *IntExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Lit.Class
+}
+
+func (e *IntExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *IntExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	return e
 }
 
 func (e *NativeExpr) semantTypes(ctx *semCtx, c *Class) {
@@ -1234,6 +1907,14 @@ func (e *NativeExpr) semantTypes(ctx *semCtx, c *Class) {
 
 func (e *NativeExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return nothingClass
+}
+
+func (e *NativeExpr) semantOpt(ctx *semCtx) Expr {
+	return e
+}
+
+func (e *NativeExpr) semantReplaceObject(ctx *semCtx, from, to Object) Expr {
+	panic("NativeExpr.semantReplaceObject should never be called")
 }
 
 func (l *IntLit) semantTypes(ctx *semCtx, c *Class) {
@@ -1302,4 +1983,33 @@ func (a *Case) semantIdentifiers(ctx *semCtx, ids semantIdentifiers, m *MatchExp
 	})
 
 	return a.Body.semantIdentifiers(ctx, ids)
+}
+
+func (i *Ident) semantReplaceObject(ctx *semCtx, from, to Object) *Ident {
+	if i.Object == from {
+		return &Ident{
+			Pos:    i.Pos,
+			Name:   i.Name,
+			Object: to,
+		}
+	}
+
+	if from == (*AttributeObject)(nil) {
+		if attr, ok := i.Object.(*Attribute); ok {
+			return &Ident{
+				Pos:  i.Pos,
+				Name: i.Name,
+				Object: &AttributeObject{
+					Object:    to,
+					Attribute: attr,
+				},
+			}
+		}
+
+		if _, ok := i.Object.(*AttributeObject); ok {
+			panic("INTERNAL COMPILER ERROR: attempt to inline a method twice")
+		}
+	}
+
+	return i
 }
