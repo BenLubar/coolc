@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"go/token"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -13,32 +14,43 @@ import (
 )
 
 func main() {
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage:", os.Args[0], "[ -o fileout ] file1.cool file2.cool ... filen.cool")
-		flag.PrintDefaults()
-		os.Exit(1)
-	}
+	os.Exit(compiler(os.Args, os.Stderr))
+}
 
+func compiler(args []string, errors io.Writer) int {
 	var opt ast.Options
 
-	flagOutput := flag.String("o", "", "output filename")
-	flag.IntVar(&opt.Benchmark, "benchmark", 1, "repeat the program this many times")
-	flag.BoolVar(&opt.Coroutine, "coroutine", false, "enable coroutine support")
-	flag.BoolVar(&opt.OptInt, "opt-int", true, "optimization: use raw integers")
-	flag.BoolVar(&opt.OptJump, "opt-jump", true, "optimization: convert conditions to jumps")
-	flag.BoolVar(&opt.OptUnused, "opt-unused", true, "optimization: skip computing unused values")
-	flag.BoolVar(&opt.OptDispatch, "opt-dispatch", true, "optimization: convert dynamic dispatch to a known method to static dispatch")
-	flag.BoolVar(&opt.OptFold, "opt-fold", true, "optimization: precompute the values of constant arithmetic expressions")
-	flag.BoolVar(&opt.OptInline, "opt-inline", true, "optimization: inline methods that are sufficiently simple")
+	opt.Errors = errors
 
-	flag.Parse()
+	flagSet := flag.NewFlagSet("coolc", flag.ContinueOnError)
+	flagSet.SetOutput(errors)
+	flagSet.Usage = func() {
+		fmt.Fprintln(opt.Errors, "Usage:", args[0], "[ -o fileout ] file1.cool file2.cool ... filen.cool")
+		flagSet.PrintDefaults()
+	}
 
-	if flag.NArg() == 0 {
-		flag.Usage()
+	flagOutput := flagSet.String("o", "", "output filename")
+	flagSet.IntVar(&opt.Benchmark, "benchmark", 1, "repeat the program this many times")
+	flagSet.BoolVar(&opt.Coroutine, "coroutine", false, "enable coroutine support")
+	flagSet.BoolVar(&opt.OptInt, "opt-int", true, "optimization: use raw integers")
+	flagSet.BoolVar(&opt.OptJump, "opt-jump", true, "optimization: convert conditions to jumps")
+	flagSet.BoolVar(&opt.OptUnused, "opt-unused", true, "optimization: skip computing unused values")
+	flagSet.BoolVar(&opt.OptDispatch, "opt-dispatch", true, "optimization: convert dynamic dispatch to a known method to static dispatch")
+	flagSet.BoolVar(&opt.OptFold, "opt-fold", true, "optimization: precompute the values of constant arithmetic expressions")
+	flagSet.BoolVar(&opt.OptInline, "opt-inline", true, "optimization: inline methods that are sufficiently simple")
+
+	if err := flagSet.Parse(args[1:]); err != nil {
+		flagSet.Usage()
+		return 1
+	}
+
+	if flagSet.NArg() == 0 {
+		flagSet.Usage()
+		return 1
 	}
 
 	if *flagOutput == "" {
-		*flagOutput = strings.TrimSuffix(flag.Arg(0), ".cool") + ".s"
+		*flagOutput = strings.TrimSuffix(flagSet.Arg(0), ".cool") + ".s"
 	}
 
 	if opt.Benchmark < 1 {
@@ -54,20 +66,20 @@ func main() {
 		f := fset.AddFile("basic.cool", -1, len(basicCool))
 		f.SetLinesForContent(basicCool)
 
-		haveErrors = prog.Parse(f, bytes.NewReader(basicCool))
+		haveErrors = prog.Parse(f, opt, bytes.NewReader(basicCool))
 	}
 
 	if opt.Coroutine {
 		f := fset.AddFile("coroutine.cool", -1, len(coroutineCool))
 		f.SetLinesForContent(coroutineCool)
 
-		haveErrors = prog.Parse(f, bytes.NewReader(coroutineCool))
+		haveErrors = prog.Parse(f, opt, bytes.NewReader(coroutineCool))
 	}
 
-	for _, name := range flag.Args() {
+	for _, name := range flagSet.Args() {
 		b, err := ioutil.ReadFile(name)
 		if err != nil {
-			fmt.Printf("%s: %v", name, err)
+			fmt.Fprintf(opt.Errors, "%s: %v", name, err)
 			haveErrors = true
 			continue
 		}
@@ -75,27 +87,29 @@ func main() {
 		f := fset.AddFile(name, -1, len(b))
 		f.SetLinesForContent(b)
 
-		haveErrors = prog.Parse(f, bytes.NewReader(b)) || haveErrors
+		haveErrors = prog.Parse(f, opt, bytes.NewReader(b)) || haveErrors
 	}
 
 	if haveErrors {
-		os.Exit(2)
+		return 2
 	}
 
 	if prog.Semant(opt, fset) {
-		os.Exit(2)
+		return 2
 	}
 
 	f, err := os.Create(*flagOutput)
 	if err != nil {
-		fmt.Printf("%s: %v\n", *flagOutput, err)
-		os.Exit(2)
+		fmt.Fprintf(opt.Errors, "%s: %v\n", *flagOutput, err)
+		return 2
 	}
 	defer f.Close()
 
 	err = prog.CodeGen(opt, fset, f)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
+		fmt.Fprintf(opt.Errors, "error during code generation: %v\n", err)
+		return 2
 	}
+
+	return 0
 }

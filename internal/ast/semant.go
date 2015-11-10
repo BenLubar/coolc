@@ -3,7 +3,6 @@ package ast
 import (
 	"fmt"
 	"go/token"
-	"os"
 )
 
 var errorIdent = &Ident{
@@ -69,7 +68,7 @@ type semCtx struct {
 }
 
 func (ctx *semCtx) Report(pos token.Pos, message string) {
-	fmt.Fprintf(os.Stderr, "%v: %s\n", ctx.fset.Position(pos), message)
+	fmt.Fprintf(ctx.opt.Errors, "%v: %s\n", ctx.fset.Position(pos), message)
 	ctx.haveErrors = true
 }
 

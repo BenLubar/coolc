@@ -1,6 +1,10 @@
 package ast
 
+import "io"
+
 type Options struct {
+	Errors io.Writer
+
 	Benchmark int
 	Coroutine bool
 

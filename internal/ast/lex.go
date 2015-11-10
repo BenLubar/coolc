@@ -10,12 +10,14 @@ import (
 	"unicode"
 )
 
-func (p *Program) Parse(f *token.File, r *bytes.Reader) (haveErrors bool) {
+func (p *Program) Parse(f *token.File, opt Options, r *bytes.Reader) (haveErrors bool) {
 	l := &lex{
 		file: f,
 		r:    r,
 
 		program: p,
+
+		opt: opt,
 	}
 
 	yyParse(l)
@@ -78,6 +80,8 @@ type lex struct {
 
 	program   *Program
 	haveError bool
+
+	opt Options
 }
 
 func (l *lex) Lex(lvalue *yySymType) (tok int) {
@@ -364,8 +368,8 @@ func (l *lex) Lex(lvalue *yySymType) (tok int) {
 }
 
 func (l *lex) Error(s string) {
+	fmt.Fprintf(l.opt.Errors, "%v: %s\n", l.file.Position(l.Pos()), s)
 	l.haveError = true
-	fmt.Printf("%v: %s\n", l.file.Position(l.Pos()), s)
 }
 
 func (l *lex) Pos() token.Pos {
