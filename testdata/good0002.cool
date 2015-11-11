@@ -7,6 +7,34 @@ class Main() extends IO() {
 		out("3 + 2 = ").out_any(3 + 2).out("\n");
 		out("3 - 2 = ").out_any(3 - 2).out("\n");
 		out("3 * 2 = ").out_any(3 * 2).out("\n");
-		out("3 / 2 = ").out_any(3 / 2).out("\n")
+		out("3 / 2 = ").out_any(3 / 2).out("\n");
+
+		(if (23 < 32)
+			out("A")
+		else
+			out("B")).out("\n");
+
+		if (
+			!if (23 < 32)
+				false
+			else
+				true
+		)
+			out("C")
+		else
+			out("D");
+		out_any("\n");
+
+		out("1 - -1 = ").out_any(
+			toString() match {
+				case s : String => 1
+				case a : Any => abort("fail 1")
+			}
+			--
+			if (23 < 32)
+				1
+			else
+				abort("fail 2")).out("\n")
+
 	};
 }

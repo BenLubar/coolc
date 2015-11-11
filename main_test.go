@@ -30,6 +30,10 @@ func TestBad0005(t *testing.T) {
 	testBad(t, "bad0005")
 }
 
+func TestBad0006(t *testing.T) {
+	testBad(t, "bad0006")
+}
+
 func TestGood0000(t *testing.T) {
 	testGood(t, "good0000", "libcool.a")
 }
