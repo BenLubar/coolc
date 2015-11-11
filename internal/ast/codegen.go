@@ -1009,8 +1009,10 @@ func (e *DynamicCallExpr) genCountVars(ctx *genCtx) int {
 
 func (e *DynamicCallExpr) genCode(ctx *genCtx) {
 	e.Recv.genCode(ctx)
-	ctx.Printf("\ttest %%eax, %%eax\n")
-	ctx.Printf("\tjz runtime.null_panic\n")
+	if !e.RecvNotNull {
+		ctx.Printf("\ttest %%eax, %%eax\n")
+		ctx.Printf("\tjz runtime.null_panic\n")
+	}
 	ctx.Printf("\tpush %%eax\n")
 	for _, a := range e.Args {
 		a.genCode(ctx)

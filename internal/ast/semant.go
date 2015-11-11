@@ -962,6 +962,10 @@ func (e *NotExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Boolean.Class
 }
 
+func (e *NotExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *NotExpr) semantOpt(ctx *semCtx) Expr {
 	expr := e.Expr.semantOpt(ctx)
 	if expr != e.Expr {
@@ -992,6 +996,10 @@ func (e *NegativeExpr) semantTypes(ctx *semCtx, c *Class) {
 func (e *NegativeExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	ctx.AssertLess(e.Expr.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *NegativeExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *NegativeExpr) semantOpt(ctx *semCtx) Expr {
@@ -1037,6 +1045,10 @@ func (e *IfExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return ctx.Lub(e.Then.semantIdentifiers(ctx, ids), e.Else.semantIdentifiers(ctx, ids))
 }
 
+func (e *IfExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return e.Then.semantGuaranteedNonNull(ctx) && e.Else.semantGuaranteedNonNull(ctx)
+}
+
 func (e *IfExpr) semantOpt(ctx *semCtx) Expr {
 	cond := e.Cond.semantOpt(ctx)
 	then := e.Then.semantOpt(ctx)
@@ -1080,6 +1092,10 @@ func (e *WhileExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return e.Unit.Class
 }
 
+func (e *WhileExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *WhileExpr) semantOpt(ctx *semCtx) Expr {
 	cond := e.Cond.semantOpt(ctx)
 	body := e.Body.semantOpt(ctx)
@@ -1119,6 +1135,10 @@ func (e *LessOrEqualExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) 
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Boolean.Class
+}
+
+func (e *LessOrEqualExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *LessOrEqualExpr) semantOpt(ctx *semCtx) Expr {
@@ -1164,6 +1184,10 @@ func (e *LessThanExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	return e.Boolean.Class
 }
 
+func (e *LessThanExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *LessThanExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
@@ -1204,6 +1228,10 @@ func (e *MultiplyExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *MultiplyExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *MultiplyExpr) semantOpt(ctx *semCtx) Expr {
@@ -1257,6 +1285,10 @@ func (e *DivideExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 	return e.Int.Class
 }
 
+func (e *DivideExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *DivideExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
@@ -1308,6 +1340,10 @@ func (e *AddExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Int.Class
 }
 
+func (e *AddExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *AddExpr) semantOpt(ctx *semCtx) Expr {
 	left := e.Left.semantOpt(ctx)
 	right := e.Right.semantOpt(ctx)
@@ -1357,6 +1393,10 @@ func (e *SubtractExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Cl
 	ctx.AssertLess(e.Left.semantIdentifiers(ctx, ids), e.Int)
 	ctx.AssertLess(e.Right.semantIdentifiers(ctx, ids), e.Int)
 	return e.Int.Class
+}
+
+func (e *SubtractExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *SubtractExpr) semantOpt(ctx *semCtx) Expr {
@@ -1435,6 +1475,15 @@ func (e *MatchExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	}
 
 	return ctx.Lub(ts...)
+}
+
+func (e *MatchExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	for _, c := range e.Cases {
+		if !c.Body.semantGuaranteedNonNull(ctx) {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *MatchExpr) semantOpt(ctx *semCtx) Expr {
@@ -1534,6 +1583,7 @@ func (e *DynamicCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) 
 				}
 			}
 
+			e.RecvNotNull = e.Recv.semantGuaranteedNonNull(ctx)
 			e.HasOverride = left.HasOverride[i]
 
 			return m.Type.Class
@@ -1542,6 +1592,13 @@ func (e *DynamicCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) 
 
 	ctx.Report(e.Name.Pos, "undeclared method "+left.Type.Name+"."+e.Name.Name)
 	return nothingClass
+}
+
+func (e *DynamicCallExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	if !ctx.Less(nullClass, e.Name.Method.Type.Class) {
+		return true
+	}
+	return false
 }
 
 func (e *DynamicCallExpr) semantOpt(ctx *semCtx) Expr {
@@ -1559,10 +1616,11 @@ func (e *DynamicCallExpr) semantOpt(ctx *semCtx) Expr {
 			Recv:        recv,
 			Name:        e.Name,
 			Args:        args,
+			RecvNotNull: recv.semantGuaranteedNonNull(ctx),
 			HasOverride: e.HasOverride,
 		}
 	}
-	if !e.HasOverride {
+	if e.RecvNotNull && !e.HasOverride {
 		if inl, ok := semantInline(ctx, e.Recv, e.Name, e.Args); ok {
 			return inl
 		}
@@ -1623,6 +1681,13 @@ func (e *SuperCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *C
 
 	ctx.Report(e.Name.Pos, "undeclared method "+e.Class.Type.Name+"."+e.Name.Name)
 	return nothingClass
+}
+
+func (e *SuperCallExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	if !ctx.Less(nullClass, e.Name.Method.Type.Class) {
+		return true
+	}
+	return false
 }
 
 func (e *SuperCallExpr) semantOpt(ctx *semCtx) Expr {
@@ -1706,6 +1771,16 @@ func (e *StaticCallExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *
 	return nothingClass
 }
 
+func (e *StaticCallExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	if !ctx.Less(nullClass, e.Name.Method.Type.Class) {
+		return true
+	}
+	if _, ok := e.Recv.(*AllocExpr); ok {
+		return true
+	}
+	return false
+}
+
 func (e *StaticCallExpr) semantOpt(ctx *semCtx) Expr {
 	recv := e.Recv.semantOpt(ctx)
 	args := make([]Expr, len(e.Args))
@@ -1757,6 +1832,10 @@ func (e *AllocExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return e.Type.Class
 }
 
+func (e *AllocExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *AllocExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -1776,8 +1855,15 @@ func (e *AssignExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 	} else {
 		e.Name.Object = o.Object
 		ctx.AssertLess(e.Expr.semantIdentifiers(ctx, ids), o.Type)
+		if !o.Object.CanAssign() {
+			ctx.Report(e.Name.Pos, "cannot assign to "+e.Name.Name)
+		}
 	}
 	return e.Unit.Class
+}
+
+func (e *AssignExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *AssignExpr) semantOpt(ctx *semCtx) Expr {
@@ -1825,6 +1911,10 @@ func (e *VarExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 		})
 	}
 	return e.Body.semantIdentifiers(ctx, ids)
+}
+
+func (e *VarExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return e.Body.semantGuaranteedNonNull(ctx)
 }
 
 func (e *VarExpr) semantOpt(ctx *semCtx) Expr {
@@ -1877,6 +1967,10 @@ func (e *ChainExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class
 	return e.Expr.semantIdentifiers(ctx, ids)
 }
 
+func (e *ChainExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return e.Expr.semantGuaranteedNonNull(ctx)
+}
+
 func (e *ChainExpr) semantOpt(ctx *semCtx) Expr {
 	pre := e.Pre.semantOpt(ctx)
 	expr := e.Expr.semantOpt(ctx)
@@ -1909,6 +2003,10 @@ func (e *ThisExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Class
 }
 
+func (e *ThisExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *ThisExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -1933,6 +2031,10 @@ func (e *NullExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return nullClass
 }
 
+func (e *NullExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return false
+}
+
 func (e *NullExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -1954,6 +2056,10 @@ func (e *UnitExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Class
 }
 
+func (e *UnitExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *UnitExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -1972,6 +2078,10 @@ func (e *NameExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	}
 	ctx.Report(e.Name.Pos, "undeclared identifier "+e.Name.Name)
 	return nothingClass
+}
+
+func (e *NameExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return e.Name.Object.NonNull(ctx)
 }
 
 func (e *NameExpr) semantOpt(ctx *semCtx) Expr {
@@ -1996,6 +2106,10 @@ func (e *StringExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Clas
 	return e.Lit.Class
 }
 
+func (e *StringExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *StringExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -2012,6 +2126,10 @@ func (e *BoolExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class 
 	return e.Lit.Class
 }
 
+func (e *BoolExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
+}
+
 func (e *BoolExpr) semantOpt(ctx *semCtx) Expr {
 	return e
 }
@@ -2026,6 +2144,10 @@ func (e *IntExpr) semantTypes(ctx *semCtx, c *Class) {
 
 func (e *IntExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return e.Lit.Class
+}
+
+func (e *IntExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	return true
 }
 
 func (e *IntExpr) semantOpt(ctx *semCtx) Expr {
@@ -2045,6 +2167,10 @@ func (e *NativeExpr) semantTypes(ctx *semCtx, c *Class) {
 
 func (e *NativeExpr) semantIdentifiers(ctx *semCtx, ids semantIdentifiers) *Class {
 	return nothingClass
+}
+
+func (e *NativeExpr) semantGuaranteedNonNull(ctx *semCtx) bool {
+	panic("NativeExpr.semantGuaranteedNonNull should never be called")
 }
 
 func (e *NativeExpr) semantOpt(ctx *semCtx) Expr {

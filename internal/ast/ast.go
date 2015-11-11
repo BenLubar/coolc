@@ -107,6 +107,16 @@ func (a *Formal) RawInt() bool {
 	return false
 }
 
+// NonNull implements Object.
+func (a *Formal) NonNull(ctx *semCtx) bool {
+	return !ctx.Less(nullClass, a.Type.Class)
+}
+
+// CanAssign implements Object.
+func (a *Formal) CanAssign() bool {
+	return false
+}
+
 // AttributeObject is a type used in optimized ASTs that allows access to
 // another object's attributes.
 type AttributeObject struct {
@@ -135,6 +145,16 @@ func (a *AttributeObject) Stack() bool {
 // RawInt implements Object.
 func (a *AttributeObject) RawInt() bool {
 	return a.Attribute.RawInt()
+}
+
+// NonNull implements Object.
+func (a *AttributeObject) NonNull(ctx *semCtx) bool {
+	return !ctx.Less(nullClass, a.Attribute.Type.Class)
+}
+
+// CanAssign implements Object.
+func (a *AttributeObject) CanAssign() bool {
+	return true
 }
 
 // Feature is a feature as defined by section 3.1 of CoolAid.
@@ -183,6 +203,16 @@ func (a *Attribute) RawInt() bool {
 	return false
 }
 
+// NonNull implements Object.
+func (a *Attribute) NonNull(ctx *semCtx) bool {
+	return !ctx.Less(nullClass, a.Type.Class)
+}
+
+// CanAssign implements Object.
+func (a *Attribute) CanAssign() bool {
+	return true
+}
+
 // Method is a def feature, as defined by section 6 of CoolAid.
 type Method struct {
 	// Override is true if and only if the `override` keyword was used in
@@ -208,6 +238,7 @@ type Method struct {
 type Expr interface {
 	semantTypes(*semCtx, *Class)
 	semantIdentifiers(*semCtx, semantIdentifiers) *Class
+	semantGuaranteedNonNull(*semCtx) bool
 	semantOpt(*semCtx) Expr
 	semantReplaceObject(*semCtx, Object, Object) Expr
 
@@ -350,6 +381,16 @@ func (e *MatchExpr) RawInt() bool {
 	return false
 }
 
+// NonNull implements Object.
+func (a *MatchExpr) NonNull(ctx *semCtx) bool {
+	return true
+}
+
+// CanAssign implements Object.
+func (a *MatchExpr) CanAssign() bool {
+	return false
+}
+
 // DynamicCallExpr is an expression of the form `x(...)` or `y.x(...)`.
 type DynamicCallExpr struct {
 	// Recv is `this` in `x(...)` or `y` in `y.x(...)`.
@@ -359,6 +400,8 @@ type DynamicCallExpr struct {
 	// Args are the arguments given to the method call.
 	Args []Expr
 
+	// RecvNotNull is true if the receiver is guaranteed to be non-null.
+	RecvNotNull bool
 	// HasOverride is true if the method called is unknown at compile time.
 	HasOverride bool
 }
@@ -438,6 +481,16 @@ func (e *VarExpr) Stack() bool {
 // RawInt implements Object.
 func (e *VarExpr) RawInt() bool {
 	return e.Type.Name == "Int"
+}
+
+// NonNull implements Object.
+func (a *VarExpr) NonNull(ctx *semCtx) bool {
+	return !ctx.Less(nullClass, a.Type.Class)
+}
+
+// CanAssign implements Object.
+func (a *VarExpr) CanAssign() bool {
+	return true
 }
 
 // ChainExpr is an expression of the form `x; y`.
@@ -526,6 +579,12 @@ type Object interface {
 	// RawInt returns true if this is an unboxed integer. RawInt requres
 	// Stack.
 	RawInt() bool
+	// NonNull returns true if the object is guaranteed to not be null
+	// at runtime.
+	NonNull(*semCtx) bool
+	// CanAssign returns true if the object is allowed to be assigned
+	// a new value.
+	CanAssign() bool
 }
 
 // Ident is an object or type identifier. Exactly one of Class, Method, Object
