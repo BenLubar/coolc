@@ -230,6 +230,7 @@ runtime.case_panic:
 	.cfi_def_cfa_register ebp
 	subl $0, %esp
 
+	shll $2, %eax
 	movl class_names(%eax), %eax
 	push %eax
 
