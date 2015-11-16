@@ -8,19 +8,23 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
 func init() {
-	mk := exec.Command("make", "libcool.a", "libcoolsched.a")
+	mk := exec.Command("make", "-s", "libcool.a", "libcoolsched.a")
 	mk.Dir = "libcool"
 	if output, err := mk.CombinedOutput(); err != nil {
 		fmt.Println(string(output))
 		panic(err)
+	} else if len(output) != 0 {
+		fmt.Println(string(output))
+		panic("unexpected output from make")
 	}
 }
 
-func runCompiler(args ...string) (out []byte, exit int) {
+func runCompiler(args []string) (out []byte, exit int) {
 	var buf bytes.Buffer
 
 	exit = compiler(args, &buf)
@@ -39,7 +43,7 @@ func testBad(t testing.TB, prefix string, args ...string) {
 		t.Fatalf("error reading %q: %v", expected, err)
 	}
 
-	out, exit := runCompiler(append(append([]string{"coolc", "-o", os.DevNull}, args...), source)...)
+	out, exit := runCompiler(append(append([]string{"coolc", "-o", os.DevNull}, args...), source))
 	if exit != 2 {
 		t.Errorf("exit status for %q was unexpected: %v", source, exit)
 	}
@@ -56,15 +60,17 @@ func testGood(t testing.TB, prefix, lib string, args ...string) {
 	asm := prefix + ".s"
 	obj := prefix + ".o"
 	// use .exe regardless of platform to make .gitignore easier
-	exe := prefix + ".exe"
+	exe := prefix + strings.Join(args, "") + ".exe"
 
 	expect, err := ioutil.ReadFile(expected)
 	if err != nil {
 		t.Fatalf("error reading %q: %v", expected, err)
 	}
 
-	if out, exit := runCompiler(append(append([]string{"coolc", "-o", asm}, args...), source)...); exit != 0 {
+	if out, exit := runCompiler(append(append([]string{"coolc", "-o", asm}, args...), source)); exit != 0 {
 		t.Fatalf("unexpected compiler exit status for %q: %v\n%s", source, exit, out)
+	} else if len(out) != 0 {
+		t.Errorf("unexpected compiler ouput for %q:\n%s", source, out)
 	}
 
 	if output, err := exec.Command("as", "-32", "-g", "--fatal-warnings", "-o", obj, asm).CombinedOutput(); err != nil {
@@ -91,20 +97,20 @@ func benchmarkGood(b *testing.B, prefix, lib string, args ...string) {
 	asm := prefix + ".s"
 	obj := prefix + ".o"
 	// use .exe regardless of platform to make .gitignore easier
-	exe := prefix + ".exe"
+	exe := prefix + strings.Join(args, "") + ".exe"
 
-	if out, exit := runCompiler(append(append([]string{"coolc", "-o", asm, "-benchmark", strconv.Itoa(b.N)}, args...), source)...); exit != 0 {
+	if out, exit := runCompiler(append(append([]string{"coolc", "-o", asm, "-benchmark", strconv.Itoa(b.N)}, args...), source)); exit != 0 {
 		b.Fatalf("unexpected compiler exit status for %q: %v\n%s", source, exit, out)
+	} else if len(out) != 0 {
+		b.Errorf("unexpected compiler ouput for %q:\n%s", source, out)
 	}
 
 	if output, err := exec.Command("as", "-32", "-g", "--fatal-warnings", "-o", obj, asm).CombinedOutput(); err != nil {
-		b.Errorf("unexpected compiler error for %q: %v\n%s", source, err, output)
-		return
+		b.Fatalf("unexpected compiler error for %q: %v\n%s", source, err, output)
 	}
 
 	if output, err := exec.Command("ld", "-melf_i386", "-o", exe, "--start-group", filepath.Join("testdata", lib), obj).CombinedOutput(); err != nil {
-		b.Errorf("unexpected compiler error for %q: %v\n%s", source, err, output)
-		return
+		b.Fatalf("unexpected compiler error for %q: %v\n%s", source, err, output)
 	}
 
 	b.ResetTimer()
